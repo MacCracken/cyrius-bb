@@ -1,9 +1,17 @@
 # cyrius-bb — main entry point
-# Stdlib auto-included via cyrius.toml
+# Stdlib auto-included via cyrius.cyml; mabda/sankoch/sigil via [deps.NAME]
 
 fn main() {
     alloc_init();
-    println("hello from cyrius-bb");
+
+    # Smoke test the mabda dep — no window required, just prove the
+    # include path resolves and we can call into the bundle. M1-proper
+    # blocks on soorat (windowing) + kiran (engine) being ported from
+    # Rust; until then, mabda's compute / pure-helper surface is all
+    # we can exercise.
+    var name = gpu_err_name(GPU_ERR_NONE);
+    println("cyrius-bb: mabda link OK — gpu_err_name(0)=");
+    println(name);
     return 0;
 }
 

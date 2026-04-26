@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "5.6.24"
+cyrius = "5.7.7"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
@@ -19,14 +19,14 @@ cyrius = "5.6.24"
 # ship-in-a-week one that demonstrates the stack without needing a
 # novel engineering gate to clear.
 #
-# Dep chain (folded into Cyrius stdlib):
-#   mabda       — GPU rendering (2.5D sprite + depth composition)
-#   kiran       — game engine (ECS, scene hierarchy, input)
-#   impetus     — physics (ball bounce, paddle collision, brick destruction)
-#   shravan     — audio (sound effects, level music)
-#   hisab       — vector / transform math
-#   sankoch     — save-file / high-score compression
-#   sigil       — high-score integrity hash
+# Dep chain:
+#   mabda     — GPU rendering (2.5D sprite + depth composition)              [available]
+#   hisab     — vector / transform math                                      [Cyrius, no dist bundle at tag 2.2.0 yet]
+#   sankoch   — save-file / high-score compression                           [available]
+#   sigil     — high-score integrity hash                                    [available]
+#   kiran     — game engine (ECS, scene hierarchy, input)                    [Rust → port pending]
+#   impetus   — physics (ball bounce, paddle collision, brick destruction)   [Rust → port pending]
+#   shravan   — audio (sound effects, level music)                           [Cyrius v4.10.3, needs bump + dist bundle]
 #
 # Original-assets policy: per ADR 0002, all art and sound are new work,
 # public-domain reference material, or commissioned with clear license.
@@ -54,7 +54,47 @@ stdlib = [
     "chrono",
     "tagged",
     "assert",
-    "mabda",
-    "sankoch",
-    "sigil",
 ]
+
+[deps.mabda]
+git = "https://github.com/MacCracken/mabda.git"
+tag = "2.5.0"
+modules = ["dist/mabda.cyr"]
+
+[deps.sankoch]
+git = "https://github.com/MacCracken/sankoch.git"
+tag = "2.1.0"
+modules = ["dist/sankoch.cyr"]
+
+[deps.sigil]
+git = "https://github.com/MacCracken/sigil.git"
+tag = "2.9.3"
+modules = ["dist/sigil.cyr"]
+
+# ── Pending deps: not yet wireable ───────────────────────────────────
+# kiran and impetus are Rust today; they need porting to Cyrius before
+# they can be consumed here. shravan is already Cyrius but pinned to
+# v4.10.3 and lacks a dist/shravan.cyr bundle — it needs a toolchain
+# bump and a bundle.sh pass.
+#
+# Uncomment each block when its upstream ships a tag with dist/<name>.cyr.
+#
+# [deps.hisab]
+# git = "https://github.com/MacCracken/hisab.git"
+# tag = "2.2.0"
+# modules = ["dist/hisab.cyr"]
+#
+# [deps.kiran]
+# git = "https://github.com/MacCracken/kiran.git"
+# tag = "TBD"
+# modules = ["dist/kiran.cyr"]
+#
+# [deps.impetus]
+# git = "https://github.com/MacCracken/impetus.git"
+# tag = "TBD"
+# modules = ["dist/impetus.cyr"]
+#
+# [deps.shravan]
+# git = "https://github.com/MacCracken/shravan.git"
+# tag = "TBD"
+# modules = ["dist/shravan.cyr"]
