@@ -1,0 +1,60 @@
+[package]
+name = "cyrius-bb"
+version = "${file:VERSION}"
+description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakout (Atari, 1976)."
+license = "GPL-3.0-only"
+repository = "https://github.com/MacCracken/cyrius-bb"
+language = "cyrius"
+cyrius = "5.6.24"
+
+# cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
+# from-observation in Cyrius. 50-year-anniversary homage to Breakout
+# (Atari, 1976) — the seminal title in the genre. Same retro-game-port-
+# in-Cyrius pattern as cyrius-doom, cyrius-nba-jam, encom-hits, and
+# cyrius-braid; proves the Cyrius game stack (mabda + kiran + impetus
+# + shravan) carries accessible-scope arcade titles.
+#
+# Deliberately the simplest technical bet in the retro-port series —
+# Braid's time-rewind ring buffer is the hard one; cyrius-bb is the
+# ship-in-a-week one that demonstrates the stack without needing a
+# novel engineering gate to clear.
+#
+# Dep chain (folded into Cyrius stdlib):
+#   mabda       — GPU rendering (2.5D sprite + depth composition)
+#   kiran       — game engine (ECS, scene hierarchy, input)
+#   impetus     — physics (ball bounce, paddle collision, brick destruction)
+#   shravan     — audio (sound effects, level music)
+#   hisab       — vector / transform math
+#   sankoch     — save-file / high-score compression
+#   sigil       — high-score integrity hash
+#
+# Original-assets policy: per ADR 0002, all art and sound are new work,
+# public-domain reference material, or commissioned with clear license.
+# No ripping from original Breakout or any Atari-era asset.
+
+[build]
+entry = "src/main.cyr"
+output = "build/cyrius-bb"
+
+[deps]
+stdlib = [
+    "syscalls",
+    "alloc",
+    "fmt",
+    "io",
+    "fs",
+    "str",
+    "string",
+    "vec",
+    "args",
+    "hashmap",
+    "process",
+    "thread",
+    "fnptr",
+    "chrono",
+    "tagged",
+    "assert",
+    "mabda",
+    "sankoch",
+    "sigil",
+]
