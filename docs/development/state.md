@@ -8,7 +8,7 @@
 
 ## Toolchain
 
-- **Cyrius pin**: `5.7.8` (in `cyrius.cyml [package].cyrius`)
+- **Cyrius pin**: `5.7.11` (in `cyrius.cyml [package].cyrius`)
 
 ## Milestones
 

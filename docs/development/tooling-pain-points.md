@@ -4,7 +4,7 @@ Captured 2026-04-26 while wiring `cyrius.cyml` deps for cyrius-bb.
 Dogfood targets: `cyrius`, `owl`, `cyim`. This is a running log —
 append, don't rewrite.
 
-**Toolchain at last sweep:** cyrius 5.7.8 + cyim 1.1.3 + owl 1.1.6.
+**Toolchain at last sweep:** cyrius 5.7.11 + cyim 1.1.3 + owl 1.1.6.
 
 ## Status
 
@@ -17,7 +17,7 @@ append, don't rewrite.
 | P5  | cyrius deps  | lockfile not auto-generated                          | MED      | ❌ open — paired with P8 |
 | P6  | mabda / docs | soorat absent from cyrius-bb dep-chain docs          | project  | ❌ open (project-side) |
 | P7  | mabda        | `gpu_err_name` returns description, not symbolic name | LOW     | ❌ open |
-| P8  | cyrius deps  | `cyrius deps --lock` regressed from cold             | HIGH     | 🆕 new in cyrius 5.7.8 — paired with P5 |
+| P8  | cyrius deps  | `cyrius deps --lock` regressed from cold             | HIGH     | 🆕 new since cyrius 5.7.8 — paired with P5 |
 | —   | owl          | head/tail idiom undocumented                         | LOW      | ✅ fixed in owl 1.1.6 |
 | —   | cyim         | no multi-edit-in-one-call mode                       | LOW      | ✅ fixed in cyim 1.1.2 |
 | —   | cyim         | multiple `--expect=` flags — semantics unclear       | LOW      | ✅ fixed in cyim 1.1.3 (rejected with `duplicate flag`) |
@@ -369,6 +369,31 @@ text now containing the expected guidance).
 - 🆕 P8 new in 5.7.8 (`--lock` regression)
 
 ### 2026-04-26 — re-swept against cyim 1.1.3
+
+### 2026-04-26 — re-swept against cyrius 5.7.11
+
+User confirmed 5.7.11 is current; remaining open items deferred
+to a few releases out. All five open `cyrius deps` items re-run
+with their original repros:
+
+- ❌ P1 (modules-path validation) — still open. Re-added
+  `[deps.hisab]` with non-existent `dist/hisab.cyr`; resolver
+  reports `4 deps resolved` exit 0 and creates a dangling symlink
+  to `~/.cyrius/deps/hisab/2.2.0/dist/hisab.cyr`. Same as 5.7.7 /
+  5.7.8.
+- ❌ P2 (`cyrius deps --help` runs resolver) — still open. Output:
+  `3 deps resolved`, exit 0.
+- ❌ P3 (deps not in top-level help) — still open. `cyrius help`
+  output unchanged; only incidental hit is `vet` description
+  containing the substring "dependencies".
+- ❌ P5 (lockfile not auto-generated) — still open. Plain
+  `cyrius deps` writes no `cyrius.lock`.
+- ❌ P8 (`--lock` regression from cold) — still open. From clean
+  slate, `cyrius deps --lock` reports `cyrius.lock: 0 deps locked`
+  and writes an empty lockfile. Two-step workaround unchanged.
+
+No new pain points caught in this sweep. cyim 1.1.3 and owl 1.1.6
+unchanged.
 
 - ✅ cyim multiple-`--expect=` resolved — now errors `cyim: duplicate flag: --expect` exit 2, file untouched. Atomic rejection, clear message. Better than the asked-for outcome.
 - 📝 Bonus: 1.1.3 also rejects `--expect=` on `--replace` (which was always undocumented; docs say `--expect=` is for `--write`/`--batch` only). 1.1.2 silently accepted; 1.1.3 errors. Good cleanup.
