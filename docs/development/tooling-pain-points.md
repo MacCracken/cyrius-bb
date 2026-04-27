@@ -4,7 +4,7 @@ Captured 2026-04-26 while wiring `cyrius.cyml` deps for cyrius-bb.
 Dogfood targets: `cyrius`, `owl`, `cyim`. This is a running log —
 append, don't rewrite.
 
-**Toolchain at last sweep:** cyrius 5.7.8 + cyim 1.1.2 + owl 1.1.6.
+**Toolchain at last sweep:** cyrius 5.7.8 + cyim 1.1.3 + owl 1.1.6.
 
 ## Status
 
@@ -20,8 +20,8 @@ append, don't rewrite.
 | P8  | cyrius deps  | `cyrius deps --lock` regressed from cold             | HIGH     | 🆕 new in cyrius 5.7.8 — paired with P5 |
 | —   | owl          | head/tail idiom undocumented                         | LOW      | ✅ fixed in owl 1.1.6 |
 | —   | cyim         | no multi-edit-in-one-call mode                       | LOW      | ✅ fixed in cyim 1.1.2 |
-| —   | cyim         | multiple `--expect=` flags — semantics unclear       | LOW      | ❌ open (untested) |
-| —   | cyim         | `--grep` `^` anchor doesn't match start-of-line     | LOW      | ❌ open |
+| —   | cyim         | multiple `--expect=` flags — semantics unclear       | LOW      | ✅ fixed in cyim 1.1.3 (rejected with `duplicate flag`) |
+| —   | cyim         | `--grep` is literal substring; needs `--find` regex + `--regex=<flavor>` | LOW      | ❌ open (design agreed 2026-04-26) |
 
 **Severity legend.** HIGH = silent corruption or multi-hour debug
 trap. MED = workflow blocker with workaround, or discoverability
@@ -219,6 +219,10 @@ to match what's actually returned, and (separately) add a
 Tiny papercut, not a blocker — but it's the kind of API friction
 that adds up across a 432-fn surface.
 
+**User response (2026-04-26).** Deferred. mabda 3.0 is focused on
+pure-Cyrius GPU-native (no wgpu shim); breaking renames there
+would add noise to a bigger pivot. Reconsider for mabda 3.0.1.
+
 ## owl
 
 ### Note — `--line-range=A:B` is the head/tail substitute  ✅ RESOLVED in owl 1.1.6
@@ -270,41 +274,62 @@ feature marked its own resolution.
 have matched zero or many places. That's the right default.
 Combined with `--expect-1` it gives belt-and-suspenders.
 
-### Note — `--grep` regex anchor `^` does not match start-of-line  (LOW)
+### Note — `--grep` does substring match, not regex  (LOW, refined 2026-04-26 against cyim 1.1.3)
 
-**Repro.** `cyim --grep '^## ' /path/to/markdown-with-headings.md`
+**Repro.** Create a file with two relevant lines:
+  - `^X is the first line literally` (literal caret)
+  - `X starts the third line without caret` (no caret)
 
-**Observed.** Returns zero results, exits 1. Same file with
-`cyim --grep '## '` returns every section heading correctly.
-Falling back to `grep -n '^## ' file` works as expected.
+Run `cyim --grep '^X' file`.
 
-**Expected.** Either honor POSIX/PCRE line anchors (`^` matches
-start-of-line, `$` matches end-of-line) so the regex flavor
-matches user expectation, or document the supported subset in
-`--help`. The silent zero-match is the worst outcome — a caller
-looking for headings could conclude the file has none.
+**Observed.** Matches line 1 only — the line that contains the
+literal characters `^X` as a substring. Line 3 (which would match
+if `^` were a start-of-line regex anchor) is not returned. Same
+behavior in cyim 1.1.2 and 1.1.3.
 
-**To repro and confirm.** `cyim --grep '^## ' docs/development/tooling-pain-points.md`
-should return the 8 `## ` headings; currently returns nothing.
+**Conclusion.** `--grep` is doing literal substring matching, not
+regex. The flag name `--grep` and the placeholder `<pattern>` in
+`--help` both imply regex semantics, which is the misleading bit.
 
-### Note — multiple `--expect=` flags on one invocation: semantics unclear  (LOW, untested)
+**Expected (design agreed with user, 2026-04-26).** Two new flags:
 
-**Observation.** During the cyrius 5.7.8 sweep I tried passing
-three `--expect=<pat>` flags to a single `cyim --batch` call
-(checking three separate strings landed). Behaviour was not
-verified — possibly only the last took effect, possibly all three
-were checked silently, possibly only the first. Reduced to a
-single `--expect=` and moved on.
+- `cyim --find <pattern> <file>` — regex search (replaces or
+  supplements `--grep`). Anchors `^` and `$` honored, standard
+  metacharacter set documented in `--help`.
+- `cyim --regex=<flavor>` — optional flavor selector. Pick a
+  default (likely POSIX ERE or a small PCRE subset) and let
+  callers override per invocation when they need a different
+  flavor.
 
-**Expected.** Either (a) all `--expect=` flags must pass (logical
-AND across patterns) and this is documented in `--help`; or (b)
-explicitly reject multiple instances with `error: --expect can
-only be specified once`. Right now the silent shrug means a
-caller trying to assert three things gets two unverified.
+Keeps `--grep` available for literal substring callers if
+back-compat matters; otherwise `--grep` can be retired in favor
+of `--find` once consumers migrate. The naming split (`--find`
+for the verb, `--regex` for the flavor knob) avoids overloading
+one flag with two responsibilities.
 
-**To repro and confirm.** `cyim --write F --expect=PAT_THAT_PASSES
---expect=PAT_THAT_FAILS <<EOF ... EOF` — does it error or
-succeed? Determines which case applies.
+**Side-effect noticed.** This file already has 3 occurrences of
+the literal string `^## ` (inside code spans documenting this
+very issue), so `cyim --grep '^## ' docs/development/tooling-pain-points.md`
+now returns 3 hits — but those are the documentation, not the
+actual section headers. Self-referential confusion is a small
+tell that `--grep` semantics differ from user expectation.
+
+### Note — multiple `--expect=` flags on one invocation  ✅ RESOLVED in cyim 1.1.3
+
+**Original observation.** During the cyrius 5.7.8 sweep three
+`--expect=<pat>` flags were passed to a single `cyim --batch` call.
+Behaviour was unverifiable — silent shrug, no clear semantics.
+Originally requested either (a) AND across patterns, or (b)
+explicit rejection of multiple instances.
+
+**Resolution.** cyim 1.1.3 chose (b) and ships a clear error:
+`cyim: duplicate flag: --expect`, exit 2, file untouched. Atomic
+rejection, no half-edit. Cleaner than the asked-for outcome.
+
+**Bonus.** 1.1.3 also rejects `--expect=` on `--replace` (which
+was always undocumented; docs say `--expect=` is for `--write`/
+`--batch`, while `--replace` uses `--expect-N` / `--expect-1`).
+1.1.2 silently accepted the misuse; 1.1.3 errors. Good cleanup.
 
 ## Wins
 
@@ -342,5 +367,11 @@ text now containing the expected guidance).
 - ✅ cyim multi-edit fixed (`--batch` shipped)
 - ❌ P1, P2, P3, P5 still open
 - 🆕 P8 new in 5.7.8 (`--lock` regression)
-- 📝 cyim multiple-`--expect=` ambiguity logged but not yet repro'd
-- 📝 cyim `--grep '^pat'` line-anchor not honored — caught while verifying this doc
+
+### 2026-04-26 — re-swept against cyim 1.1.3
+
+- ✅ cyim multiple-`--expect=` resolved — now errors `cyim: duplicate flag: --expect` exit 2, file untouched. Atomic rejection, clear message. Better than the asked-for outcome.
+- 📝 Bonus: 1.1.3 also rejects `--expect=` on `--replace` (which was always undocumented; docs say `--expect=` is for `--write`/`--batch` only). 1.1.2 silently accepted; 1.1.3 errors. Good cleanup.
+- ❌ cyim `--grep` confirmed as literal substring match (not regex) — refined the note with crisper evidence (literal-`^` vs anchor-`^` probe).
+- ✏️ P7 deferred per user feedback to mabda 3.0.1; mabda 3.0 is pure-Cyrius GPU-native pivot.
+- 🎯 cyim `--grep` regex design agreed: ship `--find` (regex search) + `--regex=<flavor>` (flavor selector). User to land later.
