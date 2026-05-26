@@ -6,7 +6,7 @@ type: state
 
 # Documentation Health — cyrius-bb
 
-> **Last refresh**: 2026-05-25 (language + doc-standards refresh: toolchain pin 5.7.11 → 6.0.1; stale `docs/development/applications/` → `first-party/` standards links fixed in CLAUDE.md + roadmap.md; this ledger scaffolded; the three missing required root files — CONTRIBUTING / SECURITY / CODE_OF_CONDUCT — drafted and added; ADR 0003 accepted — self-rolled primitives, first game code `src/fixed.cyr` + `src/geom.cyr` landed with 19 green tests; **post-0.1.0**: headless simulation + offscreen renderer + the M1 real-time loop (`input`/`tick`/`present`/`main`) landed; all engine/asset deps dropped from `cyrius.cyml` (bare-stdlib, warning-free, DCE binary 748 KB → 114 KB); suite now 84 assertions green). | **Refresh cadence**: opportunistic — when a doc is touched, update its row; re-anchor the "Last refresh" date and the at-a-glance buckets when they drift.
+> **Last refresh**: 2026-05-25 (language + doc-standards refresh: toolchain pin 5.7.11 → 6.0.1; stale `docs/development/applications/` → `first-party/` standards links fixed in CLAUDE.md + roadmap.md; this ledger scaffolded; the three missing required root files — CONTRIBUTING / SECURITY / CODE_OF_CONDUCT — drafted and added; ADR 0003 accepted — self-rolled primitives, first game code `src/fixed.cyr` + `src/geom.cyr` landed with 19 green tests; **0.2.0 cut** — M1 complete: headless sim + offscreen renderer + HUD + real-time loop (`input`/`tick`/`present`/`hud`/`main`); all engine/asset deps dropped from `cyrius.cyml` (bare-stdlib, warning-free, DCE binary 748 KB → 98.6 KB); suite 93 assertions green). | **Refresh cadence**: opportunistic — when a doc is touched, update its row; re-anchor the "Last refresh" date and the at-a-glance buckets when they drift.
 >
 > **Scope**: This repo only (`cyrius-bb`) — the whole `docs/` tree plus root-level files (README, CHANGELOG, CLAUDE.md, the required-root set, VERSION, cyrius.cyml, LICENSE). Upstream-dep docs (mabda, sankoch, sigil, shravan, kiran, impetus, the Cyrius stdlib) live in their own repos and are not audited here.
 >
@@ -38,10 +38,10 @@ Numbers roll up from the per-tier tables below.
 | File | Last touched | Status | Action |
 |---|---|---|---|
 | `README.md` | 2026-04-26 | ✅ Fresh | Landing page — what / what-it-isn't / deps / build / status. Accurate for scaffold stage. Refresh the Status block at each milestone. |
-| `CHANGELOG.md` | 2026-05-25 | ✅ Fresh | **Source of truth per CLAUDE.md.** `[0.1.0]` cut + dated 2026-05-25 (scaffold + primitives + doc compliance, 748,032 B DCE binary); `[Unreleased]` now collecting the headless simulation (ball/paddle/bricks/world) toward 0.2.0/M1. Keep a Changelog format. |
+| `CHANGELOG.md` | 2026-05-25 | ✅ Fresh | **Source of truth per CLAUDE.md.** `[0.2.0]` consolidated + dated (M1 complete: sim + renderer + HUD + loop, 98,648 B); `[0.1.0]` below; `[Unreleased]` empty. Keep a Changelog format. |
 | `CLAUDE.md` | 2026-05-25 | ✅ Fresh | Durable preferences/process/procedures. **2026-05-25**: standards links repointed `applications/` → `first-party/`; shared-crates link + doc-health pointer added. Version not inlined (delegated to state.md) — correct. |
 | `cyrius.cyml` | 2026-05-25 | ✅ Fresh | Manifest + dep chain. **2026-05-25**: toolchain pin `5.7.11` → `6.0.1`; then per ADR 0003 all external deps commented out (mabda/sankoch/sigil + the already-deferred kiran/impetus/shravan/hisab) — build is bare-stdlib, warning-free. sankoch/sigil re-wire at M5. |
-| `VERSION` | 2026-04-26 | ✅ Fresh | Single source of truth (`0.1.0`). Bumped at milestone close per CLAUDE.md. |
+| `VERSION` | 2026-05-25 | ✅ Fresh | Single source of truth (`0.2.0` — M1 close). Bumped at milestone close per CLAUDE.md. |
 | `LICENSE` | 2026-04-26 | ✅ Fresh | GPL-3.0-only — matches `cyrius.cyml` `license` field. |
 | `CONTRIBUTING.md` | 2026-05-25 | ✅ Fresh | **Added 2026-05-25.** Adapted from the mabda sibling; leads with the two ADR-driven hard constraints (original-assets, homage-from-observation), the playtest-over-unit-test gate, and the Cyrius conventions from CLAUDE.md. |
 | `SECURITY.md` | 2026-05-25 | ✅ Fresh | **Added 2026-05-25.** No-FFI / kavach-owns-sandbox framing; the save file (`scores.cyb`, sankoch + sigil) is the named untrusted-input surface. Pre-1.0 supported-versions table; audit history empty (honest — no audit run yet). |
@@ -79,7 +79,7 @@ Numbers roll up from the per-tier tables below.
 
 | File | Last touched | Status | Action |
 |---|---|---|---|
-| `state.md` | 2026-05-25 | ✅ Fresh | **Rotates every release.** **2026-05-25**: 0.1.0 cut + post-cut headless simulation — Source/Tests sections list ball/paddle/bricks/world (59 assertions); dep strategy per ADR 0003. |
+| `state.md` | 2026-05-25 | ✅ Fresh | **Rotates every release.** **2026-05-25**: 0.2.0 (M1 complete) — version/milestones/source/tests refreshed (93 assertions, 98,648 B); dep strategy per ADR 0003. |
 | `roadmap.md` | 2026-05-25 | ✅ Fresh | Milestone sequence M0→v1.0, v1.0 pinned 2026-06-13. **2026-05-25**: stale `applications/` standards link fixed. |
 | `tooling-pain-points.md` | 2026-05-25 | ✅ Fresh | Append-only dogfood log (cyrius/cyim/owl). **2026-05-25**: pin-bump entry added — open `cyrius deps` items (P1/P2/P3/P5/P8) **not yet re-swept against 6.0.1**, carried forward. Next real sweep should re-run each repro and reclassify. |
 

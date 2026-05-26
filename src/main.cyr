@@ -17,6 +17,7 @@ include "src/bricks.cyr"
 include "src/world.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
+include "src/hud.cyr"
 include "src/input.cyr"
 include "src/present.cyr"
 include "src/tick.cyr"
@@ -56,6 +57,7 @@ fn run_headless(frames): i64 {
         i = i + 1;
     }
     render_world(f, wd);
+    hud_render(f, wd);
     fb_write_ppm(f, "build/cyrius-bb-headless.ppm");
     println("cyrius-bb headless smoke — score / bricks-remaining:");
     fmt_int_fd(1, world_score(wd));
@@ -89,6 +91,7 @@ fn run_interactive(): i64 {
         if (st == WS_GAME_OVER) { running = 0; }
         if (st == WS_LEVEL_CLEAR) { running = 0; }
         render_world(f, wd);
+        hud_render(f, wd);
         fb_present_blit(f);
     }
     fb_present_close();
@@ -99,6 +102,7 @@ fn run_interactive(): i64 {
 fn main(): i64 {
     alloc_init();
     args_init();
+    hud_init();
     if (argc() >= 2) {
         return run_headless(atoi(argv(1)));
     }

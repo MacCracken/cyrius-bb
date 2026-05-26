@@ -15,6 +15,7 @@ include "src/bricks.cyr"
 include "src/world.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
+include "src/hud.cyr"
 
 fn step_n(wd, n): i64 {
     var i = 0;
@@ -27,6 +28,7 @@ fn step_n(wd, n): i64 {
 
 fn main() {
     alloc_init();
+    hud_init();
     var f = fb_new(200, 150);
     # ball heading up-left into the brick field, so the frames show
     # bricks being destroyed before it returns toward the paddle.
@@ -41,14 +43,17 @@ fn main() {
     var wd = world_new(b, p, g, fixed_from_int(200), fixed_from_int(150), 3, fixed_from_int(5));
 
     render_world(f, wd);
+    hud_render(f, wd);
     fb_write_ppm(f, "build/frame00.ppm");
 
     step_n(wd, 8);
     render_world(f, wd);
+    hud_render(f, wd);
     fb_write_ppm(f, "build/frame01.ppm");
 
     step_n(wd, 8);
     render_world(f, wd);
+    hud_render(f, wd);
     fb_write_ppm(f, "build/frame02.ppm");
 
     println("cyrius-bb demo: score after 16 ticks =");

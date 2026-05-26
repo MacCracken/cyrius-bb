@@ -4,11 +4,12 @@
 
 ## Version
 
-Last release: **0.1.0** (cut 2026-05-25). Current dev tip (unreleased) adds the full M1 playable loop on self-rolled primitives — see [ADR 0003](../adr/0003-self-rolled-primitives.md) and CHANGELOG `[Unreleased]`.
+**0.2.0** — M1 (foundational loop) complete. Playable brick-breaker on self-rolled primitives + bare stdlib ([ADR 0003](../adr/0003-self-rolled-primitives.md)): fixed-point physics, offscreen renderer, HUD, raw-tty input, real-time loop. (Prior: 0.1.0 — scaffold + primitives, 2026-05-25.)
 
-- **DCE binary**: 114,408 B (x86_64, static, stripped) — down from 748,032 B at 0.1.0 after dropping the dormant mabda/sankoch/sigil deps.
-- **Tests**: 84 assertions, 0 failed. Lint + fmt clean.
+- **DCE binary**: 98,648 B (x86_64, static, stripped) — down from 748,032 B at 0.1.0 after dropping the dormant mabda/sankoch/sigil deps.
+- **Tests**: 93 assertions, 0 failed. Lint + fmt clean.
 - **Deps**: bare stdlib — zero external deps (sankoch + sigil re-wire at M5).
+- **Caveat**: interactive loop + `/dev/fb0` present are build/lint-verified only (no console/framebuffer in dev/CI); loop logic proven via the headless `<frames>` smoke + unit tests.
 
 ## Toolchain
 
@@ -19,8 +20,8 @@ Last release: **0.1.0** (cut 2026-05-25). Current dev tip (unreleased) adds the 
 See [`roadmap.md`](roadmap.md). Immediate sequence:
 
 - M0 — scaffold (✅ 2026-04-24)
-- M1 — ball + paddle + single brick layer, wall/paddle/brick collision, basic render loop
-- M2 — level system (5+ levels, increasing speed / brick count)
+- M1 — ball + paddle + bricks, collision, render loop, HUD, input (✅ 0.2.0, 2026-05-25)
+- M2 — level system (5+ levels, increasing speed / brick count) ← next
 - M3 — 2.5D depth pass (parallax background, brick-destruction perspective, particle debris)
 - M4 — audio pass (shravan-synthesized effects, optional slot-loaded music)
 - M5 — high-score file (sankoch-compressed, sigil-integrity-hashed)
@@ -40,13 +41,13 @@ Present (M1 playable loop — 84 assertions green):
 - `src/world.cyr` — `world_step()` tick + `world_serve` (re-serve after loss)
 - `src/framebuf.cyr` — offscreen RGB surface + clipped `fb_fill_rect` + PPM dump (self-rolled)
 - `src/render.cyr` — `render_world()`: bricks/paddle/ball as flat rects
+- `src/hud.cyr` — score + lives overlay (3×5 bitmap digit font)
 - `src/input.cyr` — keyboard raw-tty input (a/d/arrows/space/q) + pure `bb_key_action` decoder
 - `src/tick.cyr` — ~60 fps frame pacing
 - `src/present.cyr` — best-effort `/dev/fb0` blit (untested in CI; on-console only)
 - `programs/demo.cyr` — eyeball harness; dumps `build/frame00..02.ppm`
 
 Planned modules:
-- `src/hud.cyr` — score / lives / level overlay
 - `src/level.cyr` — level loading, progression, speed-curve (M2)
 - `src/save.cyr` — high-score file I/O (sankoch + sigil) (M5)
 - `src/level.cyr` — level loading, progression, speed-curve
@@ -68,7 +69,7 @@ No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art
 
 ## Tests
 
-- `tests/cyrius-bb.tcyr` — **84 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios, framebuf, render, input decode, serve). Deterministic + headless.
+- `tests/cyrius-bb.tcyr` — **93 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios, framebuf, render, hud, input decode, serve). Deterministic + headless.
 - Playtest gate — every milestone requires manual playthrough (feel concerns); pending the render/input/loop bites, the simulation has only the unit-test gate so far.
 
 ## Dependencies

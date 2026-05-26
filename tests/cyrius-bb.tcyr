@@ -9,6 +9,7 @@ include "src/bricks.cyr"
 include "src/world.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
+include "src/hud.cyr"
 include "src/input.cyr"
 
 fn test_smoke() {
@@ -211,6 +212,31 @@ fn test_render() {
     return 0;
 }
 
+fn test_hud() {
+    test_group("hud");
+    hud_init();
+    var f = fb_new(20, 10);
+    fb_clear(f, 0, 0, 0);
+    # digit '1' at (0,0) scale 1: rows 010/110/010/010/111
+    hud_draw_digit(f, 0, 0, 1, 1, 255, 255, 255);
+    assert_eq(fb_get(f, 1, 0, 0), 255, "'1' top-middle on");
+    assert_eq(fb_get(f, 0, 0, 0), 0, "'1' top-left off");
+    assert_eq(fb_get(f, 0, 4, 0), 255, "'1' bottom row on");
+    assert_eq(fb_get(f, 2, 4, 0), 255, "'1' bottom-right on");
+    # digit '0': row1 = 101 -> centre hole
+    fb_clear(f, 0, 0, 0);
+    hud_draw_number(f, 0, 0, 0, 1, 255, 255, 255);
+    assert_eq(fb_get(f, 0, 0, 0), 255, "'0' top-left on");
+    assert_eq(fb_get(f, 1, 0, 0), 255, "'0' top-middle on");
+    assert_eq(fb_get(f, 1, 1, 0), 0, "'0' centre hole");
+    assert_eq(fb_get(f, 2, 1, 0), 255, "'0' right side on");
+    # out-of-range digit is ignored (no crash, nothing drawn)
+    fb_clear(f, 0, 0, 0);
+    hud_draw_digit(f, 0, 0, 42, 1, 255, 255, 255);
+    assert_eq(fb_get(f, 0, 0, 0), 0, "bad digit draws nothing");
+    return 0;
+}
+
 fn test_input() {
     test_group("input");
     assert_eq(bb_key_action(97), ACT_LEFT, "'a' -> LEFT");
@@ -253,6 +279,7 @@ fn main() {
     test_world_clear();
     test_framebuf();
     test_render();
+    test_hud();
     test_input();
     test_world_serve();
     return assert_summary();

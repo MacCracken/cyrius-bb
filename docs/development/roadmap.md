@@ -14,13 +14,13 @@
 - ADR 0001 (homage-from-observation thesis) + ADR 0002 (original-assets-only policy)
 - Docs scaffolded per [first-party-documentation.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/first-party/first-party-documentation.md)
 
-### M1 — Foundational loop (v0.2.0)
+### M1 — Foundational loop (v0.2.0) — ✅ shipped 2026-05-25
 
 *The "it's a game" milestone. Without M1, everything else is impossible.*
 
-Built on self-rolled primitives, not kiran/impetus/mabda — see [ADR 0003](../adr/0003-self-rolled-primitives.md).
+Built on self-rolled primitives, not kiran/impetus/mabda — see [ADR 0003](../adr/0003-self-rolled-primitives.md). 93 assertions green; DCE binary 98,648 B. Interactive loop + `/dev/fb0` present are build/lint-verified only (no console in dev/CI).
 
-Done (headless, 59 assertions green):
+Done:
 - ✅ `src/fixed.cyr` — 16.16 fixed-point math
 - ✅ `src/geom.cyr` — AABB collision, reflection, paddle english
 - ✅ `src/ball.cyr` — ball entity + velocity integration
@@ -38,13 +38,13 @@ Done (cont.):
 - ✅ `src/tick.cyr` — ~60 fps frame pacing
 - ✅ `src/present.cyr` — best-effort `/dev/fb0` blit (on-console)
 - ✅ `src/main.cyr` — real-time loop (tick → input → step → render → present) + headless `<frames>` smoke; mabda smoke test dropped, build now bare-stdlib
+- ✅ `src/hud.cyr` — score + lives overlay (3×5 bitmap digit font)
 
-Remaining for M1:
-- `src/hud.cyr` — score / lives / level overlay (digits drawn as rects or a tiny bitmap font)
+Carried forward (not blocking M1 close):
 - `/dev/fb0` present verification on a real Linux console (untestable under this desktop session)
-- Placeholder assets — solid-color rectangles, no art pass yet
+- Placeholder assets stay solid-color rectangles until the art pass (M6)
 
-**Acceptance**: a single-level game is playable end-to-end. Ball bounces off walls + paddle + bricks; bricks destruct on hit; score increments; when all bricks destroyed, "level complete" state fires.
+**Acceptance** (met): a single-level game is playable end-to-end — ball bounces off walls + paddle + bricks; bricks destruct on hit; score increments; all-bricks-destroyed fires the level-complete state. Verified via 93 headless assertions + the `<frames>` smoke.
 
 ### M2 — Level progression (v0.3.0)
 

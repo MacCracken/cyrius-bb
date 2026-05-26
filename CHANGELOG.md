@@ -4,26 +4,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-05-25
+
+**M1 — the foundational loop.** A playable brick-breaker built entirely on self-rolled primitives + bare Cyrius stdlib ([ADR 0003](docs/adr/0003-self-rolled-primitives.md)): deterministic fixed-point physics, an offscreen renderer, a HUD, raw-tty input, and a real-time loop. The whole simulation is unit-tested headless (93 assertions); interactive play + `/dev/fb0` present run on a Linux console. DCE release binary: **98,648 bytes** (was 748,032 at 0.1.0).
+
 ### Added
-- `src/ball.cyr` — ball entity (16.16 fixed-point): position/velocity/radius struct + `ball_integrate` (position += velocity per tick).
-- `src/paddle.cyr` — paddle entity: bounded horizontal `paddle_move` (clamped to the play area) + `paddle_cx` centre reference for english.
-- `src/bricks.cyr` — flat cols×rows brick grid: per-brick alive flags (byte array), index→rect derivation, `brick_destroy` (scores + decrements alive count).
-- `src/world.cyr` — `world_step()`: one deterministic fixed-timestep tick wiring it all together — integrate → wall/paddle/brick collision via `geom.cyr` → score/lives/state (playing / ball-lost / level-clear / game-over).
-- `src/framebuf.cyr` — offscreen RGB surface (self-rolled, per ADR 0003): `fb_fill_rect` (clipped), `fb_set`/`fb_get`, `fb_clear`, and `fb_write_ppm` (binary P6 dump). No window or `/dev/fb0` needed — fully pixel-assertable and CI-friendly.
-- `src/render.cyr` — `render_world()`: draws bricks / paddle / ball as flat rects (fixed-point → pixels), bricks red, paddle green, ball white.
-- `programs/demo.cyr` — throwaway harness: steps a world and dumps `build/frame00..02.ppm` to eyeball the sim + renderer before the real loop lands.
+- `src/ball.cyr` — ball entity (16.16 fixed-point): position/velocity/radius + `ball_integrate`.
+- `src/paddle.cyr` — paddle entity: bounded horizontal `paddle_move` + `paddle_cx` centre reference for english.
+- `src/bricks.cyr` — flat cols×rows brick grid: per-brick alive flags, index→rect derivation, `brick_destroy` (scores + decrements alive count).
+- `src/world.cyr` — `world_step()`: one deterministic fixed-timestep tick — integrate → wall/paddle/brick collision via `geom.cyr` → score/lives/state (playing / ball-lost / level-clear / game-over) — plus `world_serve` / `world_set_state` (re-serve after a loss).
+- `src/framebuf.cyr` — offscreen RGB surface: `fb_fill_rect` (clipped), `fb_set`/`fb_get`, `fb_clear`, `fb_write_ppm` (binary P6). Pixel-assertable and CI-friendly.
+- `src/render.cyr` — `render_world()`: bricks / paddle / ball as flat rects (fixed-point → pixels).
+- `src/hud.cyr` — score + lives overlay via a 3×5 bitmap digit font (`hud_draw_number`).
 - `src/input.cyr` — keyboard via Linux terminal raw mode (termios ioctl, non-blocking): `bb_key_action` pure decoder (unit-tested) + `input_poll` (a/d/arrows → move, space → launch, q/ESC → quit).
-- `src/tick.cyr` — ~60 fps frame pacing (`frame_sleep`).
-- `src/present.cyr` — best-effort `/dev/fb0` blit (24-bpp RGB → 32-bpp BGRX); graceful no-op when no framebuffer. Untested in CI (no console) by design.
-- `src/main.cyr` — rewritten into the real-time loop (tick → input → `world_step` → `render_world` → present), with ball re-serve on loss and quit/clear/over handling. Adds a headless `cyrius-bb <frames>` smoke mode (step N, dump a PPM, print score/bricks) — CI-friendly, no I/O.
-- `world_serve` / `world_set_state` in `src/world.cyr` — re-serve the ball after a life is lost.
-- `tests/cyrius-bb.tcyr` — **84 assertions** (added input-decode + world-serve groups). All green; lint + fmt clean.
+- `src/tick.cyr` — ~60 fps frame pacing. `src/present.cyr` — best-effort `/dev/fb0` blit (graceful no-op without a console; untested in CI by design).
+- `src/main.cyr` — real-time loop (tick → input → `world_step` → `render_world` → `hud_render` → present), ball re-serve on loss, quit/clear/over handling; plus a headless `cyrius-bb <frames>` smoke mode (step N, dump a PPM, print score/bricks).
+- `programs/demo.cyr` — harness that dumps `build/frame00..02.ppm` to eyeball the sim + renderer.
+- `tests/cyrius-bb.tcyr` — **93 assertions** (fixed-point, geometry, ball, paddle, bricks, five `world_step` scenarios, framebuf, render, hud, input decode, serve). All green; lint + fmt clean.
 
 ### Changed
-- Dropped the unused engine/asset deps from `cyrius.cyml` per [ADR 0003](docs/adr/0003-self-rolled-primitives.md): `mabda` removed (renderer is self-rolled); `sankoch` + `sigil` commented out until M5 (save file). cyrius-bb now builds against **bare stdlib** — zero external deps, **zero link warnings**.
-- DCE release binary: **748,032 → 114,408 bytes** (6.5× smaller) from removing the dormant deps.
-
-M1 is now playable end-to-end on a Linux console (interactive loop) and verifiable headless (the `<frames>` smoke). Remaining M1 polish: a HUD (score/lives) and `/dev/fb0` verification on a real console.
+- Dropped the unused engine/asset deps from `cyrius.cyml` per [ADR 0003](docs/adr/0003-self-rolled-primitives.md): `mabda` removed (renderer is self-rolled); `sankoch` + `sigil` commented out until M5 (save file). cyrius-bb builds against **bare stdlib** — zero external deps, zero link warnings.
+- DCE release binary **748,032 → 98,648 bytes** (~7.6× smaller) from removing the dormant deps.
 
 ## [0.1.0] — 2026-05-25
 
