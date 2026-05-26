@@ -1,0 +1,47 @@
+# geom.cyr — collision + reflection primitives for cyrius-bb
+#
+# Pure functions over 16.16 fixed-point (see fixed.cyr). No state, no
+# alloc — the deterministic, headless-testable core of the game's feel.
+# Encodes the documented Breakout mechanics (ADR 0001): axis-aligned
+# wall / brick reflection and paddle "english" (outbound angle depends
+# on where the ball strikes the paddle).
+#
+# Requires fixed.cyr to be included first.
+
+# Axis-aligned bounding-box overlap. All args 16.16 fixed-point; boxes
+# given as (x, y) top-left + (w, h) size. Touching edges count as
+# overlap. Returns 1 on overlap, else 0.
+fn aabb_overlap(ax, ay, aw, ah, bx, by, bw, bh): i64 {
+    if (ax + aw < bx) { return 0; }
+    if (bx + bw < ax) { return 0; }
+    if (ay + ah < by) { return 0; }
+    if (by + bh < ay) { return 0; }
+    return 1;
+}
+
+# Reflect a velocity component off an axis-aligned surface: negate it.
+# Used for wall and brick bounces (flip vx on a side hit, vy on a
+# top/bottom hit).
+fn reflect(v): i64 { return (0 - v); }
+
+# Paddle english. Given the ball's centre x, the paddle's centre x, and
+# the paddle's half-width (all 16.16 fixed), return the normalised hit
+# offset, clamped to [-FIXED_ONE, +FIXED_ONE]:
+#   centre hit -> 0          (ball goes straight up)
+#   left edge  -> -FIXED_ONE  (steep left)
+#   right edge -> +FIXED_ONE  (steep right)
+# This is the *mechanism*. The exact outbound-angle curve is a feel /
+# playtest tuning, not a unit-test concern (see CLAUDE.md "playtest over
+# unit test for feel").
+fn paddle_english(ball_cx, paddle_cx, paddle_half_w): i64 {
+    if (paddle_half_w == 0) { return 0; }
+    var off = fixed_div(ball_cx - paddle_cx, paddle_half_w);
+    return fixed_clamp(off, (0 - FIXED_ONE), FIXED_ONE);
+}
+
+# Outbound horizontal velocity after a paddle hit: the english offset
+# scaled by the ball's horizontal speed budget. The caller flips vy
+# upward to complete the bounce.
+fn paddle_bounce_vx(english, max_vx): i64 {
+    return fixed_mul(english, max_vx);
+}

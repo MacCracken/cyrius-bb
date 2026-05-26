@@ -1,0 +1,53 @@
+# fixed.cyr — 16.16 fixed-point math for cyrius-bb
+#
+# Deterministic, integer-only. Chosen over f64 so ball / paddle / brick
+# physics is bit-identical across platforms (homage fidelity + future
+# speedrun determinism — see ADR 0003). Pattern mirrors
+# cyrius-doom/src/fixed.cyr, but self-contained: cyrius-bb does not
+# vendor bsp, so asr() is defined here.
+#
+# IMPORTANT: Cyrius >> is LOGICAL right shift (zero-fill). asr() does the
+# arithmetic (floor) shift signed values need.
+
+enum Fixed {
+    FIXED_SHIFT = 16;
+    FIXED_ONE = 65536;
+    FIXED_HALF = 32768;
+    FIXED_MAX = 2147483647;
+}
+
+# Arithmetic right shift: floor(x / 2^n) for signed x.
+# For x < 0, ((0 - 1) - x) is non-negative, so the logical >> is exact;
+# the outer (0 - 1) - (...) restores the floor-rounded negative result.
+fn asr(x, n): i64 {
+    if (x < 0) {
+        var t = (0 - 1) - x;
+        return (0 - 1) - (t >> n);
+    }
+    return x >> n;
+}
+
+fn fixed_from_int(n): i64 { return n << FIXED_SHIFT; }
+fn fixed_to_int(f): i64 { return asr(f, FIXED_SHIFT); }
+fn fixed_round(f): i64 { return asr(f + FIXED_HALF, FIXED_SHIFT); }
+
+fn fixed_mul(a, b): i64 { return asr(a * b, FIXED_SHIFT); }
+
+fn fixed_div(a, b): i64 {
+    if (b == 0) { return FIXED_MAX; }
+    return (a << FIXED_SHIFT) / b;
+}
+
+fn fixed_abs(f): i64 {
+    if (f < 0) { return (0 - f); }
+    return f;
+}
+
+fn fixed_min(a, b): i64 { if (a < b) { return a; } return b; }
+fn fixed_max(a, b): i64 { if (a > b) { return a; } return b; }
+
+fn fixed_clamp(f, lo, hi): i64 {
+    if (f < lo) { return lo; }
+    if (f > hi) { return hi; }
+    return f;
+}

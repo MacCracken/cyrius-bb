@@ -24,16 +24,23 @@ See [`roadmap.md`](roadmap.md). Immediate sequence:
 
 ## Source
 
-Scaffold only.
+Primitives landed; entity/loop/render/input pending. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
+
+Present:
+- `src/main.cyr` — entry; currently a mabda link smoke test (to be replaced by the game loop)
+- `src/fixed.cyr` — 16.16 fixed-point math (deterministic, integer-only)
+- `src/geom.cyr` — AABB collision, axis-aligned reflection, paddle english
 
 Planned modules:
-- `src/main.cyr` — entry, game loop, scene switching
-- `src/ball.cyr` — ball physics + render
-- `src/paddle.cyr` — paddle input + render + english
-- `src/bricks.cyr` — brick layout + destruction + scoring
+- `src/ball.cyr` — ball entity, velocity integration
+- `src/paddle.cyr` — paddle entity + input
+- `src/bricks.cyr` — brick grid, destruction, scoring
+- `src/world.cyr` — `world_step()` tick: integrate → collide → score
+- `src/framebuf.cyr` — `/dev/fb0` framebuffer surface + present (self-rolled)
+- `src/input.cyr` — keyboard (self-rolled)
 - `src/level.cyr` — level loading, progression, speed-curve
 - `src/hud.cyr` — score, lives, level indicator
-- `src/audio.cyr` — sound effect synthesis via shravan
+- `src/audio.cyr` — sound-effect synthesis
 - `src/save.cyr` — high-score file I/O (sankoch + sigil)
 
 ## Assets
@@ -55,10 +62,11 @@ No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art
 
 ## Dependencies
 
-All folded into Cyrius stdlib:
-- **Core**: syscalls, alloc, fmt, io, fs, str, string, vec, args, hashmap, process, thread, fnptr, chrono, tagged, assert
-- **Game stack**: mabda (GPU), kiran (engine, planned), impetus (physics, planned), shravan (audio)
-- **Save / scoring**: sankoch (compression), sigil (hash)
+Per [ADR 0003](../adr/0003-self-rolled-primitives.md):
+- **Core stdlib**: syscalls, alloc, fmt, io, fs, str, string, vec, args, hashmap, process, thread, fnptr, chrono, tagged, assert
+- **Self-rolled** (no dep): fixed-point math, collision, game loop, framebuffer render, input — on bare stdlib
+- **Save / scoring**: sankoch (compression), sigil (hash) — retained for M5
+- **Deferred** (later in-depth projects, not this one): kiran (engine), impetus (physics), mabda (GPU), soorat (windowing). Still wired in `cyrius.cyml` as active deps pending a manifest-cleanup bite.
 
 ## Next
 

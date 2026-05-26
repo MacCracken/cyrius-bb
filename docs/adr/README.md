@@ -13,3 +13,4 @@ Decisions about cyrius-bb.
 
 - [0001 — Homage from observation, not source port](0001-homage-from-observation.md) — mechanics traced to documented public sources; no reverse-engineering of original Atari ROM / binary.
 - [0002 — Original assets only](0002-original-assets-only.md) — new art / audio / level data or public-domain reference material; no Atari-era assets shipped.
+- [0003 — Self-rolled primitives; defer kiran / impetus / mabda](0003-self-rolled-primitives.md) — tool fixed-point / collision / loop / render / input on bare stdlib (cyrius-doom pattern); the heavy engine stack is for later in-depth projects. sankoch + sigil retained.

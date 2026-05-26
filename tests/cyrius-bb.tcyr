@@ -1,11 +1,54 @@
 # cyrius-bb test suite
-# Stdlib auto-included via cyrius.toml
+# stdlib auto-included via cyrius.cyml [deps]; project modules below.
 
-fn main() {
-    alloc_init();
+include "src/fixed.cyr"
+include "src/geom.cyr"
+
+fn test_smoke() {
     test_group("smoke");
     assert(1, "true is true");
     assert_eq(1 + 1, 2, "math works");
+    return 0;
+}
+
+fn test_fixed() {
+    test_group("fixed");
+    assert_eq(fixed_from_int(5), 5 * FIXED_ONE, "from_int(5)");
+    assert_eq(fixed_to_int(fixed_from_int(7)), 7, "roundtrip 7");
+    assert_eq(fixed_mul(fixed_from_int(2), fixed_from_int(3)), fixed_from_int(6), "mul 2*3 = 6");
+    assert_eq(fixed_div(fixed_from_int(6), fixed_from_int(2)), fixed_from_int(3), "div 6/2 = 3");
+    assert_eq(asr(0 - 16, 2), 0 - 4, "asr floors -16>>2 = -4");
+    assert_eq(asr(16, 2), 4, "asr 16>>2 = 4");
+    assert_eq(fixed_abs(0 - fixed_from_int(3)), fixed_from_int(3), "abs(-3) = 3");
+    assert_eq(fixed_clamp(fixed_from_int(10), 0, fixed_from_int(5)), fixed_from_int(5), "clamp hi");
+    assert_eq(fixed_div(FIXED_ONE, 0), FIXED_MAX, "div by zero -> MAX");
+    return 0;
+}
+
+fn test_geom() {
+    test_group("geom");
+    # overlapping boxes: A x[0,4]y[0,4], B x[2,6]y[2,6]
+    assert_eq(aabb_overlap(0, 0, fixed_from_int(4), fixed_from_int(4), fixed_from_int(2), fixed_from_int(2), fixed_from_int(4), fixed_from_int(4)), 1, "overlap yes");
+    # separated on x: A x[0,2], B x[10,12]
+    assert_eq(aabb_overlap(0, 0, fixed_from_int(2), fixed_from_int(2), fixed_from_int(10), 0, fixed_from_int(2), fixed_from_int(2)), 0, "overlap no");
+    # reflection negates
+    assert_eq(reflect(fixed_from_int(3)), 0 - fixed_from_int(3), "reflect + -> -");
+    assert_eq(reflect(0 - fixed_from_int(3)), fixed_from_int(3), "reflect - -> +");
+    # paddle english: centre / right edge / left edge / clamp-beyond
+    var cx = fixed_from_int(100);
+    var half = fixed_from_int(20);
+    assert_eq(paddle_english(cx, cx, half), 0, "english centre = 0");
+    assert_eq(paddle_english(cx + half, cx, half), FIXED_ONE, "english right edge = +1");
+    assert_eq(paddle_english(cx - half, cx, half), 0 - FIXED_ONE, "english left edge = -1");
+    assert_eq(paddle_english(cx + half + half, cx, half), FIXED_ONE, "english beyond clamps to +1");
+    return 0;
+}
+
+fn main() {
+    alloc_init();
+    test_smoke();
+    test_fixed();
+    test_geom();
     return assert_summary();
 }
 

@@ -6,7 +6,7 @@ type: state
 
 # Documentation Health — cyrius-bb
 
-> **Last refresh**: 2026-05-25 (language + doc-standards refresh: toolchain pin 5.7.11 → 6.0.1; stale `docs/development/applications/` → `first-party/` standards links fixed in CLAUDE.md + roadmap.md; this ledger scaffolded; the three missing required root files — CONTRIBUTING / SECURITY / CODE_OF_CONDUCT — drafted and added). | **Refresh cadence**: opportunistic — when a doc is touched, update its row; re-anchor the "Last refresh" date and the at-a-glance buckets when they drift.
+> **Last refresh**: 2026-05-25 (language + doc-standards refresh: toolchain pin 5.7.11 → 6.0.1; stale `docs/development/applications/` → `first-party/` standards links fixed in CLAUDE.md + roadmap.md; this ledger scaffolded; the three missing required root files — CONTRIBUTING / SECURITY / CODE_OF_CONDUCT — drafted and added; ADR 0003 accepted — self-rolled primitives, first game code `src/fixed.cyr` + `src/geom.cyr` landed with 19 green tests). | **Refresh cadence**: opportunistic — when a doc is touched, update its row; re-anchor the "Last refresh" date and the at-a-glance buckets when they drift.
 >
 > **Scope**: This repo only (`cyrius-bb`) — the whole `docs/` tree plus root-level files (README, CHANGELOG, CLAUDE.md, the required-root set, VERSION, cyrius.cyml, LICENSE). Upstream-dep docs (mabda, sankoch, sigil, shravan, kiran, impetus, the Cyrius stdlib) live in their own repos and are not audited here.
 >
@@ -61,6 +61,7 @@ Numbers roll up from the per-tier tables below.
 | `template.md` | 2026-04-26 | ✅ Fresh | Copy-to-start template. |
 | `0001-homage-from-observation.md` | 2026-04-26 | 🔵 Evergreen | Mechanics traced to documented public sources; no ROM/binary reverse-engineering. Foundational. |
 | `0002-original-assets-only.md` | 2026-04-26 | 🔵 Evergreen | New art/audio/level data or public-domain reference only; no Atari-era assets. Foundational. |
+| `0003-self-rolled-primitives.md` | 2026-05-25 | ✅ Fresh | **Added 2026-05-25.** Defer kiran/impetus/mabda/soorat; tool primitives on bare stdlib (cyrius-doom pattern). Answers open-question #2 below. Re-read at v1.0 close. |
 
 ---
 
@@ -99,9 +100,11 @@ Numbers roll up from the per-tier tables below.
 Strategic doc-tree questions — not stale rows, but decisions that want an owner.
 
 1. **`docs/design/` is outside the standard doc-layer map.** It's referenced from CLAUDE.md as a deliberate project subtree, but the map has no "design" layer. Its one current file is really a source-verification action item (closer to `docs/sources.md` territory). Decide at M2/M3 (art pass) whether `docs/design/` earns its place as a project-specific subtree or its contents migrate to standard layers. Inventing a top-level `docs/` subdir is an ADR-worthy call per the standard.
-2. **mabda / sankoch / sigil now ship in the Cyrius stdlib** (present in `cyrius/lib/` at 6.0.1) but are declared here as pinned git deps. May be a dep-graph simplification once confirmed they're genuinely folded (vs vendored for cyrius's own build). Revisit when wiring real rendering/save code at M1/M5 — verify against the live [shared-crates registry](https://github.com/MacCracken/agnosticos/blob/main/docs/development/planning/shared-crates.md) before changing the manifest.
+2. **`cyrius.cyml` manifest still lists mabda as an active dep** though [ADR 0003](adr/0003-self-rolled-primitives.md) defers it (rendering is self-rolled). The build pulls mabda and emits the u256/keccak/fl_alloc link warnings for unused surface. A manifest-cleanup bite should drop mabda (and the unused stdlib gaps behind the `freelist`/sigil warnings), keeping only sankoch + sigil for the M5 save file. Tracked as the next non-gameplay bite.
 
-**Resolved 2026-05-25**: the three required root files (`CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`) were missing; drafted by hand and added this pass. Caveat carried in Tier 1: the standard prefers `cyrius init`-scaffolded root files — reconcile against the canonical templates if a re-scaffold lands.
+**Resolved 2026-05-25**:
+- The three required root files (`CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`) were missing; drafted by hand and added. Caveat in Tier 1: reconcile against canonical `cyrius init` templates if a re-scaffold lands.
+- The prior "mabda/sankoch/sigil possibly folded into stdlib" question is **answered by [ADR 0003](adr/0003-self-rolled-primitives.md)**: cyrius-bb self-rolls rendering and does not depend on mabda regardless of whether it folded; sankoch + sigil are retained as git deps for the save file. (Open-question #2 above is now the narrower manifest-cleanup follow-up.)
 
 ---
 
