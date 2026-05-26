@@ -18,13 +18,20 @@
 
 *The "it's a game" milestone. Without M1, everything else is impossible.*
 
-Built on self-rolled primitives, not kiran/impetus/mabda — see [ADR 0003](../adr/0003-self-rolled-primitives.md). Foundation landed: `src/fixed.cyr` (16.16 fixed-point) + `src/geom.cyr` (collision, reflection, paddle english), unit-tested headless.
+Built on self-rolled primitives, not kiran/impetus/mabda — see [ADR 0003](../adr/0003-self-rolled-primitives.md).
 
-- `src/ball.cyr` — ball entity, velocity integration, wall collision, paddle collision with angle-dependent bounce (paddle english — already in `geom.cyr`)
-- `src/paddle.cyr` — paddle input (keyboard), bounded motion
-- `src/bricks.cyr` — single brick layer, destruction-on-hit, scoring on destruction
-- `src/world.cyr` + `src/main.cyr` — game loop (fixed-timestep physics, variable-rate render), basic HUD
-- Render via self-rolled `/dev/fb0` framebuffer (cyrius-doom pattern); flat rectangles, depth treatment deferred to M3
+Done (headless, 59 assertions green):
+- ✅ `src/fixed.cyr` — 16.16 fixed-point math
+- ✅ `src/geom.cyr` — AABB collision, reflection, paddle english
+- ✅ `src/ball.cyr` — ball entity + velocity integration
+- ✅ `src/paddle.cyr` — bounded horizontal motion (input wiring pending)
+- ✅ `src/bricks.cyr` — brick grid, destruction-on-hit, scoring
+- ✅ `src/world.cyr` — `world_step()`: integrate → wall/paddle/brick collision → score/lives/state
+
+Remaining for M1:
+- `src/framebuf.cyr` — self-rolled `/dev/fb0` framebuffer (cyrius-doom pattern); flat rectangles, depth treatment deferred to M3
+- `src/input.cyr` — keyboard input → paddle motion
+- `src/main.cyr` — game loop (fixed-timestep physics, variable-rate render), basic HUD; drop the mabda smoke test
 - Placeholder assets — solid-color rectangles, no art pass yet
 
 **Acceptance**: a single-level game is playable end-to-end. Ball bounces off walls + paddle + bricks; bricks destruct on hit; score increments; when all bricks destroyed, "level complete" state fires.

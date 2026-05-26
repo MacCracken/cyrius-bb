@@ -1,0 +1,41 @@
+# ball.cyr — ball entity (16.16 fixed-point). See ADR 0003.
+#
+# Heap struct, 5 x i64: x, y (centre), vx, vy (per-tick velocity), radius.
+# Requires fixed.cyr (for callers); this module itself is plain i64 ops.
+
+enum BallField {
+    BO_X = 0;
+    BO_Y = 8;
+    BO_VX = 16;
+    BO_VY = 24;
+    BO_R = 32;
+    BO_SIZE = 40;
+}
+
+fn ball_new(x, y, vx, vy, r): i64 {
+    var b = alloc(BO_SIZE);
+    store64(b + BO_X, x);
+    store64(b + BO_Y, y);
+    store64(b + BO_VX, vx);
+    store64(b + BO_VY, vy);
+    store64(b + BO_R, r);
+    return b;
+}
+
+fn ball_x(b): i64 { return load64(b + BO_X); }
+fn ball_y(b): i64 { return load64(b + BO_Y); }
+fn ball_vx(b): i64 { return load64(b + BO_VX); }
+fn ball_vy(b): i64 { return load64(b + BO_VY); }
+fn ball_r(b): i64 { return load64(b + BO_R); }
+
+fn ball_set_x(b, x): i64 { store64(b + BO_X, x); return 0; }
+fn ball_set_y(b, y): i64 { store64(b + BO_Y, y); return 0; }
+fn ball_set_vx(b, vx): i64 { store64(b + BO_VX, vx); return 0; }
+fn ball_set_vy(b, vy): i64 { store64(b + BO_VY, vy); return 0; }
+
+# Advance one tick: position += velocity.
+fn ball_integrate(b): i64 {
+    store64(b + BO_X, load64(b + BO_X) + load64(b + BO_VX));
+    store64(b + BO_Y, load64(b + BO_Y) + load64(b + BO_VY));
+    return 0;
+}

@@ -1,0 +1,132 @@
+# world.cyr — game world + fixed-timestep tick. See ADR 0003.
+#
+# Holds ball + paddle + brick grid + play-area bounds + score / lives /
+# state. `world_step` runs one deterministic tick: integrate, resolve
+# wall / paddle / brick collisions, update score + state.
+#
+# Requires (include order): fixed.cyr, geom.cyr, ball.cyr, paddle.cyr,
+# bricks.cyr — then this file.
+#
+# Heap struct, 9 x i64: ball, paddle, bricks, width, height, score,
+# lives, state, english (max horizontal velocity a full-edge paddle hit
+# imparts).
+
+enum WorldState {
+    WS_PLAYING = 0;
+    WS_BALL_LOST = 1;
+    WS_LEVEL_CLEAR = 2;
+    WS_GAME_OVER = 3;
+}
+
+enum WorldField {
+    WO_BALL = 0;
+    WO_PADDLE = 8;
+    WO_BRICKS = 16;
+    WO_W = 24;
+    WO_H = 32;
+    WO_SCORE = 40;
+    WO_LIVES = 48;
+    WO_STATE = 56;
+    WO_ENGLISH = 64;
+    WO_SIZE = 72;
+}
+
+fn world_new(ball, paddle, bricks, w, h, lives, english): i64 {
+    var wd = alloc(WO_SIZE);
+    store64(wd + WO_BALL, ball);
+    store64(wd + WO_PADDLE, paddle);
+    store64(wd + WO_BRICKS, bricks);
+    store64(wd + WO_W, w);
+    store64(wd + WO_H, h);
+    store64(wd + WO_SCORE, 0);
+    store64(wd + WO_LIVES, lives);
+    store64(wd + WO_STATE, WS_PLAYING);
+    store64(wd + WO_ENGLISH, english);
+    return wd;
+}
+
+fn world_ball(wd): i64 { return load64(wd + WO_BALL); }
+fn world_paddle(wd): i64 { return load64(wd + WO_PADDLE); }
+fn world_bricks(wd): i64 { return load64(wd + WO_BRICKS); }
+fn world_score(wd): i64 { return load64(wd + WO_SCORE); }
+fn world_lives(wd): i64 { return load64(wd + WO_LIVES); }
+fn world_state(wd): i64 { return load64(wd + WO_STATE); }
+
+# One deterministic tick. Returns the resulting world state.
+fn world_step(wd): i64 {
+    if (world_state(wd) != WS_PLAYING) { return world_state(wd); }
+
+    var b = world_ball(wd);
+    var p = world_paddle(wd);
+    var g = world_bricks(wd);
+    var w = load64(wd + WO_W);
+    var h = load64(wd + WO_H);
+
+    ball_integrate(b);
+    var r = ball_r(b);
+    var d = r + r;
+
+    # left wall
+    if (ball_x(b) - r < 0) {
+        ball_set_x(b, r);
+        ball_set_vx(b, reflect(ball_vx(b)));
+    }
+    # right wall
+    if (ball_x(b) + r > w) {
+        ball_set_x(b, w - r);
+        ball_set_vx(b, reflect(ball_vx(b)));
+    }
+    # top wall
+    if (ball_y(b) - r < 0) {
+        ball_set_y(b, r);
+        ball_set_vy(b, reflect(ball_vy(b)));
+    }
+    # bottom — ball lost
+    if (ball_y(b) - r > h) {
+        store64(wd + WO_LIVES, world_lives(wd) - 1);
+        if (world_lives(wd) <= 0) {
+            store64(wd + WO_STATE, WS_GAME_OVER);
+        } else {
+            store64(wd + WO_STATE, WS_BALL_LOST);
+        }
+        return world_state(wd);
+    }
+
+    # paddle bounce — only while descending and overlapping
+    if (ball_vy(b) > 0) {
+        var pl = ball_x(b) - r;
+        var pt = ball_y(b) - r;
+        if (aabb_overlap(pl, pt, d, d, paddle_x(p), paddle_y(p), paddle_w(p), paddle_h(p)) == 1) {
+            var eng = paddle_english(ball_x(b), paddle_cx(p), asr(paddle_w(p), 1));
+            ball_set_vx(b, paddle_bounce_vx(eng, load64(wd + WO_ENGLISH)));
+            ball_set_vy(b, reflect(ball_vy(b)));
+            ball_set_y(b, paddle_y(p) - r);
+        }
+    }
+
+    # brick collision — first overlapping alive brick (flag, not break)
+    var total = bricks_total(g);
+    var hit = 0 - 1;
+    var bl = ball_x(b) - r;
+    var bt = ball_y(b) - r;
+    var brw = bricks_brick_w(g);
+    var brh = bricks_brick_h(g);
+    for (var i = 0; i < total; i += 1) {
+        if (hit < 0) {
+            if (brick_alive(g, i) == 1) {
+                if (aabb_overlap(bl, bt, d, d, brick_x(g, i), brick_y(g, i), brw, brh) == 1) {
+                    hit = i;
+                }
+            }
+        }
+    }
+    if (hit < 0) {
+        return world_state(wd);
+    }
+    store64(wd + WO_SCORE, world_score(wd) + brick_destroy(g, hit));
+    ball_set_vy(b, reflect(ball_vy(b)));
+    if (bricks_alive_count(g) == 0) {
+        store64(wd + WO_STATE, WS_LEVEL_CLEAR);
+    }
+    return world_state(wd);
+}

@@ -1,0 +1,39 @@
+# paddle.cyr — paddle entity (16.16 fixed-point). See ADR 0003.
+#
+# Heap struct, 4 x i64: x (LEFT edge), y (top), w, h.
+# Requires fixed.cyr (fixed_clamp) and the asr() in fixed.cyr.
+
+enum PaddleField {
+    PO_X = 0;
+    PO_Y = 8;
+    PO_W = 16;
+    PO_H = 24;
+    PO_SIZE = 32;
+}
+
+fn paddle_new(x, y, w, h): i64 {
+    var p = alloc(PO_SIZE);
+    store64(p + PO_X, x);
+    store64(p + PO_Y, y);
+    store64(p + PO_W, w);
+    store64(p + PO_H, h);
+    return p;
+}
+
+fn paddle_x(p): i64 { return load64(p + PO_X); }
+fn paddle_y(p): i64 { return load64(p + PO_Y); }
+fn paddle_w(p): i64 { return load64(p + PO_W); }
+fn paddle_h(p): i64 { return load64(p + PO_H); }
+
+# Paddle centre x — the reference point paddle english measures against.
+fn paddle_cx(p): i64 { return load64(p + PO_X) + asr(load64(p + PO_W), 1); }
+
+# Move horizontally by dx, clamped so the paddle stays inside
+# [min_x, max_x] (max_x is the right boundary the paddle's right edge
+# may reach). dx may be negative.
+fn paddle_move(p, dx, min_x, max_x): i64 {
+    var w = load64(p + PO_W);
+    var nx = fixed_clamp(load64(p + PO_X) + dx, min_x, max_x - w);
+    store64(p + PO_X, nx);
+    return 0;
+}

@@ -1,0 +1,76 @@
+# bricks.cyr — brick grid (16.16 fixed-point coords). See ADR 0003.
+#
+# A flat cols x rows grid of alive flags (one byte each). Brick at index
+# idx occupies a rect derived from origin + size + gap. Each brick is
+# worth `value` points (a plain integer score, not fixed-point).
+#
+# Heap struct, 11 x i64: cols, rows, origin_x, origin_y, brick_w,
+# brick_h, gap_x, gap_y, value, alive_ptr, alive_count.
+
+enum BrickField {
+    GR_COLS = 0;
+    GR_ROWS = 8;
+    GR_OX = 16;
+    GR_OY = 24;
+    GR_BW = 32;
+    GR_BH = 40;
+    GR_GX = 48;
+    GR_GY = 56;
+    GR_VAL = 64;
+    GR_ALIVE = 72;
+    GR_COUNT = 80;
+    GR_SIZE = 88;
+}
+
+# cols / rows are plain integer counts; ox/oy/bw/bh/gx/gy are 16.16
+# fixed-point; value is plain integer points.
+fn bricks_new(cols, rows, ox, oy, bw, bh, gx, gy, value): i64 {
+    var g = alloc(GR_SIZE);
+    store64(g + GR_COLS, cols);
+    store64(g + GR_ROWS, rows);
+    store64(g + GR_OX, ox);
+    store64(g + GR_OY, oy);
+    store64(g + GR_BW, bw);
+    store64(g + GR_BH, bh);
+    store64(g + GR_GX, gx);
+    store64(g + GR_GY, gy);
+    store64(g + GR_VAL, value);
+    var n = cols * rows;
+    var alive = alloc(n);
+    for (var i = 0; i < n; i += 1) {
+        store8(alive + i, 1);
+    }
+    store64(g + GR_ALIVE, alive);
+    store64(g + GR_COUNT, n);
+    return g;
+}
+
+fn bricks_total(g): i64 { return load64(g + GR_COLS) * load64(g + GR_ROWS); }
+fn bricks_alive_count(g): i64 { return load64(g + GR_COUNT); }
+fn bricks_value(g): i64 { return load64(g + GR_VAL); }
+fn bricks_brick_w(g): i64 { return load64(g + GR_BW); }
+fn bricks_brick_h(g): i64 { return load64(g + GR_BH); }
+
+fn brick_alive(g, idx): i64 { return load8(load64(g + GR_ALIVE) + idx); }
+fn brick_col(g, idx): i64 { return idx % load64(g + GR_COLS); }
+fn brick_row(g, idx): i64 { return idx / load64(g + GR_COLS); }
+
+# Top-left x / y (fixed-point) of brick idx.
+fn brick_x(g, idx): i64 {
+    var c = idx % load64(g + GR_COLS);
+    return load64(g + GR_OX) + c * (load64(g + GR_BW) + load64(g + GR_GX));
+}
+fn brick_y(g, idx): i64 {
+    var r = idx / load64(g + GR_COLS);
+    return load64(g + GR_OY) + r * (load64(g + GR_BH) + load64(g + GR_GY));
+}
+
+# Destroy brick idx if alive. Returns points gained (value) or 0 if it
+# was already dead.
+fn brick_destroy(g, idx): i64 {
+    var ap = load64(g + GR_ALIVE);
+    if (load8(ap + idx) == 0) { return 0; }
+    store8(ap + idx, 0);
+    store64(g + GR_COUNT, load64(g + GR_COUNT) - 1);
+    return load64(g + GR_VAL);
+}

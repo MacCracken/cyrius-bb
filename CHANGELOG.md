@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `src/ball.cyr` — ball entity (16.16 fixed-point): position/velocity/radius struct + `ball_integrate` (position += velocity per tick).
+- `src/paddle.cyr` — paddle entity: bounded horizontal `paddle_move` (clamped to the play area) + `paddle_cx` centre reference for english.
+- `src/bricks.cyr` — flat cols×rows brick grid: per-brick alive flags (byte array), index→rect derivation, `brick_destroy` (scores + decrements alive count).
+- `src/world.cyr` — `world_step()`: one deterministic fixed-timestep tick wiring it all together — integrate → wall/paddle/brick collision via `geom.cyr` → score/lives/state (playing / ball-lost / level-clear / game-over).
+- `tests/cyrius-bb.tcyr` — expanded to **59 assertions** (ball, paddle, bricks, and five `world_step` scenarios: wall bounce, top bounce, paddle english, brick destruction+scoring, ball-lost, level-clear). All green; lint + fmt clean.
+
+The whole game simulation is now headless and deterministic — no window required (per [ADR 0003](docs/adr/0003-self-rolled-primitives.md)). Rendering, input, and the `main.cyr` loop are the next bites.
+
 ## [0.1.0] — 2026-05-25
 
 Initial release: scaffold, deterministic game primitives, and full first-party doc compliance. No gameplay loop yet — the build approach is captured in [ADR 0003](docs/adr/0003-self-rolled-primitives.md). DCE release binary: **748,032 bytes** (x86_64, static, stripped).

@@ -29,16 +29,16 @@ See [`roadmap.md`](roadmap.md). Immediate sequence:
 
 Primitives landed; entity/loop/render/input pending. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
 
-Present:
+Present (headless simulation complete — 59 assertions green):
 - `src/main.cyr` — entry; currently a mabda link smoke test (to be replaced by the game loop)
 - `src/fixed.cyr` — 16.16 fixed-point math (deterministic, integer-only)
 - `src/geom.cyr` — AABB collision, axis-aligned reflection, paddle english
+- `src/ball.cyr` — ball entity + velocity integration
+- `src/paddle.cyr` — paddle entity + bounded horizontal motion
+- `src/bricks.cyr` — brick grid + destruction + scoring
+- `src/world.cyr` — `world_step()` tick: integrate → wall/paddle/brick collision → score/lives/state
 
 Planned modules:
-- `src/ball.cyr` — ball entity, velocity integration
-- `src/paddle.cyr` — paddle entity + input
-- `src/bricks.cyr` — brick grid, destruction, scoring
-- `src/world.cyr` — `world_step()` tick: integrate → collide → score
 - `src/framebuf.cyr` — `/dev/fb0` framebuffer surface + present (self-rolled)
 - `src/input.cyr` — keyboard (self-rolled)
 - `src/level.cyr` — level loading, progression, speed-curve
@@ -60,8 +60,8 @@ No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art
 
 ## Tests
 
-- `tests/cyrius-bb.tcyr` — unit tests (not yet written)
-- Playtest gate — every milestone requires manual playthrough (feel concerns)
+- `tests/cyrius-bb.tcyr` — **59 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios). Deterministic + headless.
+- Playtest gate — every milestone requires manual playthrough (feel concerns); pending the render/input/loop bites, the simulation has only the unit-test gate so far.
 
 ## Dependencies
 
