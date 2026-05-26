@@ -29,9 +29,9 @@ See [`roadmap.md`](roadmap.md). Immediate sequence:
 
 ## Source
 
-Primitives landed; entity/loop/render/input pending. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
+M1 complete — the full playable loop is in place. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
 
-Present (M1 playable loop — 84 assertions green):
+Present (M1 playable loop — 93 assertions green):
 - `src/main.cyr` — real-time loop (tick → input → step → render → present) + headless `<frames>` smoke
 - `src/fixed.cyr` — 16.16 fixed-point math (deterministic, integer-only)
 - `src/geom.cyr` — AABB collision, axis-aligned reflection, paddle english
@@ -49,11 +49,8 @@ Present (M1 playable loop — 84 assertions green):
 
 Planned modules:
 - `src/level.cyr` — level loading, progression, speed-curve (M2)
+- `src/audio.cyr` — sound-effect synthesis (M4)
 - `src/save.cyr` — high-score file I/O (sankoch + sigil) (M5)
-- `src/level.cyr` — level loading, progression, speed-curve
-- `src/hud.cyr` — score, lives, level indicator
-- `src/audio.cyr` — sound-effect synthesis
-- `src/save.cyr` — high-score file I/O (sankoch + sigil)
 
 ## Assets
 
@@ -63,14 +60,14 @@ Planned per [ADR 0002](../adr/0002-original-assets-only.md):
 - Original sprite set (paddle, ball, brick variants) — new pixel art
 - Era-spirit palette (not pixel-matching Atari Breakout's specific row colors)
 - Original square-wave / FM sound effects via shravan
-- Placeholder level layouts during M1–M2 development; intentional layouts by M5
+- Placeholder layouts in M1; 5+ original level layouts land in M2; final art pass in M6
 
 No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art.
 
 ## Tests
 
 - `tests/cyrius-bb.tcyr` — **93 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios, framebuf, render, hud, input decode, serve). Deterministic + headless.
-- Playtest gate — every milestone requires manual playthrough (feel concerns); pending the render/input/loop bites, the simulation has only the unit-test gate so far.
+- Playtest gate — every milestone requires manual playthrough (feel concerns). The interactive loop + `/dev/fb0` present still need a real Linux console to actually playtest (build/lint-verified only so far); headless logic is gated by the 93 assertions + the `<frames>` smoke.
 
 ## Dependencies
 
@@ -82,6 +79,9 @@ Per [ADR 0003](../adr/0003-self-rolled-primitives.md):
 
 ## Next
 
-1. **M1** — ball / paddle / bricks foundational loop. Load-bearing technical surface (collision physics + render loop); everything stacks on it.
-2. **M2** — levels. Once M1 is tunable, turn the single level into a progression.
-3. Knife article for cyrius-bb is outlined at fold-complete / v1.0 milestone. Outline captured in [agnosticos/docs/articles/_outlines.md](../../../../Repos/agnosticos/docs/articles/_outlines.md) at the appropriate time.
+Start here next session (0.2.0 is tagged):
+
+1. **M2 — level progression** (`src/level.cyr`, v0.3.0). Load level layouts from a data file, advance on clear, speed-curve + brick-count scaling across levels, lives carried across levels, 5+ original layouts (per ADR 0002). The single-level `world` already exists — M2 turns it into a sequence. See [`roadmap.md`](roadmap.md) M2 for acceptance.
+2. **v0.2.x patch** — verify the interactive loop + `/dev/fb0` present on a real Linux console (the one M1 surface not verifiable in dev/CI). Fix any blit format / resolution issues found.
+3. **Repo hygiene** (optional, anytime) — untrack the vendored stdlib: `git rm -r --cached lib/` + add `lib/*.cyr` to `.gitignore` (per first-party standards; CI regenerates via `cyrius deps`).
+4. Knife article for cyrius-bb is outlined at fold-complete / v1.0 milestone — captured in [agnosticos/docs/articles/_outlines.md](../../../../Repos/agnosticos/docs/articles/_outlines.md) at the appropriate time.

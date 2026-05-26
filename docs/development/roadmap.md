@@ -16,35 +16,11 @@
 
 ### M1 — Foundational loop (v0.2.0) — ✅ shipped 2026-05-25
 
-*The "it's a game" milestone. Without M1, everything else is impossible.*
+The "it's a game" milestone. Self-rolled on bare stdlib ([ADR 0003](../adr/0003-self-rolled-primitives.md)): fixed-point physics, AABB collision + paddle english, brick grid + scoring, offscreen renderer, HUD, raw-tty input, ~60 fps loop. Single level playable end-to-end (ball bounces off walls/paddle/bricks; bricks destruct + score; all-cleared fires level-complete). 93 headless assertions; DCE binary 98,648 B. Per-module detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.2.0]`.
 
-Built on self-rolled primitives, not kiran/impetus/mabda — see [ADR 0003](../adr/0003-self-rolled-primitives.md). 93 assertions green; DCE binary 98,648 B. Interactive loop + `/dev/fb0` present are build/lint-verified only (no console in dev/CI).
-
-Done:
-- ✅ `src/fixed.cyr` — 16.16 fixed-point math
-- ✅ `src/geom.cyr` — AABB collision, reflection, paddle english
-- ✅ `src/ball.cyr` — ball entity + velocity integration
-- ✅ `src/paddle.cyr` — bounded horizontal motion (input wiring pending)
-- ✅ `src/bricks.cyr` — brick grid, destruction-on-hit, scoring
-- ✅ `src/world.cyr` — `world_step()`: integrate → wall/paddle/brick collision → score/lives/state
-
-Done (cont.):
-- ✅ `src/framebuf.cyr` — offscreen RGB surface + clipped fill-rect + PPM dump (self-rolled)
-- ✅ `src/render.cyr` — `render_world()`: flat rects; depth treatment deferred to M3
-- ✅ `programs/demo.cyr` — eyeball harness dumping PPM frames
-
-Done (cont.):
-- ✅ `src/input.cyr` — raw-tty keyboard (a/d/arrows/space/q) + pure decoder
-- ✅ `src/tick.cyr` — ~60 fps frame pacing
-- ✅ `src/present.cyr` — best-effort `/dev/fb0` blit (on-console)
-- ✅ `src/main.cyr` — real-time loop (tick → input → step → render → present) + headless `<frames>` smoke; mabda smoke test dropped, build now bare-stdlib
-- ✅ `src/hud.cyr` — score + lives overlay (3×5 bitmap digit font)
-
-Carried forward (not blocking M1 close):
-- `/dev/fb0` present verification on a real Linux console (untestable under this desktop session)
-- Placeholder assets stay solid-color rectangles until the art pass (M6)
-
-**Acceptance** (met): a single-level game is playable end-to-end — ball bounces off walls + paddle + bricks; bricks destruct on hit; score increments; all-bricks-destroyed fires the level-complete state. Verified via 93 headless assertions + the `<frames>` smoke.
+**Carried forward** (not blocking; a v0.2.x patch or later):
+- `/dev/fb0` present + interactive loop verified on a real Linux console — build/lint-verified only so far (no console/framebuffer in dev/CI).
+- Placeholder assets stay solid-color rectangles until the art pass (M6).
 
 ### M2 — Level progression (v0.3.0)
 
