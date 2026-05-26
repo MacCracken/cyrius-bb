@@ -4,7 +4,10 @@
 
 ## Version
 
-**0.1.0** — scaffolded 2026-04-24 via `cyrius init cyrius-bb`. Module skeletons + ADR 0001 (homage-from-observation) + ADR 0002 (original-assets-only) landed first. No gameplay code yet.
+**0.1.0** — cut 2026-05-25. Scaffolded 2026-04-24 via `cyrius init cyrius-bb`; this release adds the first deterministic game primitives (`fixed.cyr`, `geom.cyr`) + full first-party doc compliance. No gameplay loop yet (see [ADR 0003](../adr/0003-self-rolled-primitives.md)).
+
+- **DCE binary**: 748,032 B (x86_64, static, stripped) — still includes unused mabda surface; shrinks after the manifest-cleanup bite.
+- **Tests**: 19 assertions (smoke + fixed + geom), 0 failed. Lint + fmt clean.
 
 ## Toolchain
 

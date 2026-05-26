@@ -38,7 +38,7 @@ Numbers roll up from the per-tier tables below.
 | File | Last touched | Status | Action |
 |---|---|---|---|
 | `README.md` | 2026-04-26 | ✅ Fresh | Landing page — what / what-it-isn't / deps / build / status. Accurate for scaffold stage. Refresh the Status block at each milestone. |
-| `CHANGELOG.md` | 2026-04-26 | ✅ Fresh | **Source of truth per CLAUDE.md.** Only `[0.1.0]` so far; `[Unreleased]` empty. Keep a Changelog format. |
+| `CHANGELOG.md` | 2026-05-25 | ✅ Fresh | **Source of truth per CLAUDE.md.** `[0.1.0]` cut + dated 2026-05-25 (scaffold + primitives + doc compliance, 748,032 B DCE binary); `[Unreleased]` empty. Keep a Changelog format. |
 | `CLAUDE.md` | 2026-05-25 | ✅ Fresh | Durable preferences/process/procedures. **2026-05-25**: standards links repointed `applications/` → `first-party/`; shared-crates link + doc-health pointer added. Version not inlined (delegated to state.md) — correct. |
 | `cyrius.cyml` | 2026-05-25 | ✅ Fresh | Manifest + dep chain. **2026-05-25**: toolchain pin `5.7.11` → `6.0.1`. All 16 stdlib modules resolve against 6.0.1; pending deps (kiran/impetus/shravan/hisab) still commented out awaiting upstream dist bundles. |
 | `VERSION` | 2026-04-26 | ✅ Fresh | Single source of truth (`0.1.0`). Bumped at milestone close per CLAUDE.md. |
@@ -79,7 +79,7 @@ Numbers roll up from the per-tier tables below.
 
 | File | Last touched | Status | Action |
 |---|---|---|---|
-| `state.md` | 2026-05-25 | ✅ Fresh | **Rotates every release.** **2026-05-25**: Cyrius pin updated to 6.0.1. Still reflects scaffold stage (no gameplay code). |
+| `state.md` | 2026-05-25 | ✅ Fresh | **Rotates every release.** **2026-05-25**: 0.1.0 cut — version section dated, binary size (748,032 B) + test count (19) recorded, modules + dep strategy updated for ADR 0003. |
 | `roadmap.md` | 2026-05-25 | ✅ Fresh | Milestone sequence M0→v1.0, v1.0 pinned 2026-06-13. **2026-05-25**: stale `applications/` standards link fixed. |
 | `tooling-pain-points.md` | 2026-05-25 | ✅ Fresh | Append-only dogfood log (cyrius/cyim/owl). **2026-05-25**: pin-bump entry added — open `cyrius deps` items (P1/P2/P3/P5/P8) **not yet re-swept against 6.0.1**, carried forward. Next real sweep should re-run each repro and reclassify. |
 

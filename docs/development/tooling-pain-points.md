@@ -413,3 +413,12 @@ against 6.0.1. They are carried forward as-is. Next real sweep should
 re-run each repro against 6.0.1 and reclassify; several may have been
 addressed in the v6.0.0 stdlib/CLI clean-slate but that's unconfirmed
 here. P7 remains deferred to mabda 3.0.1.
+
+**P8 confirmed reproducing on 6.0.1** (observed while wiring CI). From a
+populated working tree, `cyrius deps --lock` reports `cyrius.lock: 0
+deps locked` and leaves the lock empty (HEAD's `cyrius.lock` is 0 bytes
+too). So `cyrius deps --verify` against the committed empty lock is
+meaningless. Workaround adopted in `.github/workflows/ci.yml` (mirrors
+cyrius-doom): run `--verify` only when the committed lock has entries,
+else emit a `::warning::` and skip. Drop the guard once the upstream
+lockfile-writer fix lands. P1/P2/P3/P5 still pending a real re-sweep.
