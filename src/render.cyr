@@ -1,0 +1,48 @@
+# render.cyr — draw a world onto an offscreen framebuffer. See ADR 0003.
+#
+# Flat rectangles only (ball, paddle, bricks) — depth treatment is M3.
+# Converts 16.16 fixed-point world coords to integer pixels via
+# fixed_to_int. Requires (include order): fixed, ball, paddle, bricks,
+# world, framebuf — then this file.
+
+enum RenderColor {
+    BG_R = 16;
+    BG_G = 16;
+    BG_B = 32;
+}
+
+# Draw one frame of the world. Bricks red, paddle green, ball white.
+fn render_world(f, wd): i64 {
+    fb_clear(f, BG_R, BG_G, BG_B);
+
+    var g = world_bricks(wd);
+    var bw = fixed_to_int(bricks_brick_w(g));
+    var bh = fixed_to_int(bricks_brick_h(g));
+    var total = bricks_total(g);
+    var i = 0;
+    var bx = 0;
+    var by = 0;
+    while (i < total) {
+        if (brick_alive(g, i) == 1) {
+            bx = fixed_to_int(brick_x(g, i));
+            by = fixed_to_int(brick_y(g, i));
+            fb_fill_rect(f, bx, by, bw, bh, 200, 80, 80);
+        }
+        i = i + 1;
+    }
+
+    var p = world_paddle(wd);
+    var px = fixed_to_int(paddle_x(p));
+    var py = fixed_to_int(paddle_y(p));
+    var pw = fixed_to_int(paddle_w(p));
+    var ph = fixed_to_int(paddle_h(p));
+    fb_fill_rect(f, px, py, pw, ph, 80, 200, 80);
+
+    var b = world_ball(wd);
+    var rr = fixed_to_int(ball_r(b));
+    var cx = fixed_to_int(ball_x(b)) - rr;
+    var cy = fixed_to_int(ball_y(b)) - rr;
+    fb_fill_rect(f, cx, cy, rr + rr, rr + rr, 240, 240, 240);
+
+    return 0;
+}

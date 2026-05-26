@@ -7,6 +7,8 @@ include "src/ball.cyr"
 include "src/paddle.cyr"
 include "src/bricks.cyr"
 include "src/world.cyr"
+include "src/framebuf.cyr"
+include "src/render.cyr"
 
 fn test_smoke() {
     test_group("smoke");
@@ -167,6 +169,47 @@ fn test_world_clear() {
     return 0;
 }
 
+fn test_framebuf() {
+    test_group("framebuf");
+    var f = fb_new(8, 4);
+    assert_eq(fb_w(f), 8, "width");
+    assert_eq(fb_h(f), 4, "height");
+    fb_clear(f, 0, 0, 0);
+    assert_eq(fb_get(f, 0, 0, 0), 0, "clear -> 0");
+    # fill rect x[2,5) y[1,3)
+    fb_fill_rect(f, 2, 1, 3, 2, 100, 150, 200);
+    assert_eq(fb_get(f, 2, 1, 0), 100, "rect R");
+    assert_eq(fb_get(f, 2, 1, 1), 150, "rect G");
+    assert_eq(fb_get(f, 4, 2, 2), 200, "rect B interior");
+    assert_eq(fb_get(f, 0, 0, 0), 0, "outside rect stays bg");
+    assert_eq(fb_get(f, 5, 1, 0), 0, "right edge exclusive");
+    # clipping: rect runs past the right/bottom edges, must not crash
+    fb_fill_rect(f, 6, 0, 10, 10, 255, 255, 255);
+    assert_eq(fb_get(f, 7, 3, 0), 255, "clipped rect fills in-bounds");
+    # out-of-bounds set is a no-op
+    assert_eq(fb_set(f, 100, 100, 1, 2, 3), 0, "oob set no-op");
+    return 0;
+}
+
+fn test_render() {
+    test_group("render");
+    var f = fb_new(40, 30);
+    var b = ball_new(fixed_from_int(20), fixed_from_int(15), 0, 0, fixed_from_int(2));
+    var p = paddle_new(fixed_from_int(10), fixed_from_int(26), fixed_from_int(12), fixed_from_int(2));
+    var g = bricks_new(2, 1, fixed_from_int(4), fixed_from_int(4), fixed_from_int(8), fixed_from_int(4), fixed_from_int(2), 0, 10);
+    var wd = world_new(b, p, g, fixed_from_int(40), fixed_from_int(30), 3, fixed_from_int(4));
+    render_world(f, wd);
+    assert_eq(fb_get(f, 4, 4, 0), 200, "brick pixel is red");
+    assert_eq(fb_get(f, 11, 26, 1), 200, "paddle pixel is green");
+    assert_eq(fb_get(f, 20, 15, 0), 240, "ball pixel is white");
+    assert_eq(fb_get(f, 0, 15, 0), BG_R, "empty pixel is background");
+    # destroyed brick no longer drawn
+    brick_destroy(g, 0);
+    render_world(f, wd);
+    assert_eq(fb_get(f, 4, 4, 0), BG_R, "destroyed brick -> background");
+    return 0;
+}
+
 fn main() {
     alloc_init();
     test_smoke();
@@ -181,6 +224,8 @@ fn main() {
     test_world_brick();
     test_world_lost();
     test_world_clear();
+    test_framebuf();
+    test_render();
     return assert_summary();
 }
 

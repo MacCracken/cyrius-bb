@@ -9,9 +9,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `src/paddle.cyr` — paddle entity: bounded horizontal `paddle_move` (clamped to the play area) + `paddle_cx` centre reference for english.
 - `src/bricks.cyr` — flat cols×rows brick grid: per-brick alive flags (byte array), index→rect derivation, `brick_destroy` (scores + decrements alive count).
 - `src/world.cyr` — `world_step()`: one deterministic fixed-timestep tick wiring it all together — integrate → wall/paddle/brick collision via `geom.cyr` → score/lives/state (playing / ball-lost / level-clear / game-over).
-- `tests/cyrius-bb.tcyr` — expanded to **59 assertions** (ball, paddle, bricks, and five `world_step` scenarios: wall bounce, top bounce, paddle english, brick destruction+scoring, ball-lost, level-clear). All green; lint + fmt clean.
+- `src/framebuf.cyr` — offscreen RGB surface (self-rolled, per ADR 0003): `fb_fill_rect` (clipped), `fb_set`/`fb_get`, `fb_clear`, and `fb_write_ppm` (binary P6 dump). No window or `/dev/fb0` needed — fully pixel-assertable and CI-friendly.
+- `src/render.cyr` — `render_world()`: draws bricks / paddle / ball as flat rects (fixed-point → pixels), bricks red, paddle green, ball white.
+- `programs/demo.cyr` — throwaway harness: steps a world and dumps `build/frame00..02.ppm` to eyeball the sim + renderer before the real loop lands.
+- `tests/cyrius-bb.tcyr` — expanded to **74 assertions** (ball, paddle, bricks, five `world_step` scenarios, plus framebuf clipping + render pixel checks incl. "destroyed brick disappears"). All green; lint + fmt clean.
 
-The whole game simulation is now headless and deterministic — no window required (per [ADR 0003](docs/adr/0003-self-rolled-primitives.md)). Rendering, input, and the `main.cyr` loop are the next bites.
+The whole game simulation **and** an offscreen renderer are now headless and deterministic — no window required (per [ADR 0003](docs/adr/0003-self-rolled-primitives.md)). Input and the `main.cyr` real-time loop (+ a `/dev/fb0` present adapter) are the next bites.
 
 ## [0.1.0] — 2026-05-25
 

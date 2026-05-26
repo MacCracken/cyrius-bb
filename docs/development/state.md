@@ -29,7 +29,7 @@ See [`roadmap.md`](roadmap.md). Immediate sequence:
 
 Primitives landed; entity/loop/render/input pending. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
 
-Present (headless simulation complete — 59 assertions green):
+Present (headless sim + offscreen renderer complete — 74 assertions green):
 - `src/main.cyr` — entry; currently a mabda link smoke test (to be replaced by the game loop)
 - `src/fixed.cyr` — 16.16 fixed-point math (deterministic, integer-only)
 - `src/geom.cyr` — AABB collision, axis-aligned reflection, paddle english
@@ -37,10 +37,13 @@ Present (headless simulation complete — 59 assertions green):
 - `src/paddle.cyr` — paddle entity + bounded horizontal motion
 - `src/bricks.cyr` — brick grid + destruction + scoring
 - `src/world.cyr` — `world_step()` tick: integrate → wall/paddle/brick collision → score/lives/state
+- `src/framebuf.cyr` — offscreen RGB surface + clipped `fb_fill_rect` + PPM dump (self-rolled)
+- `src/render.cyr` — `render_world()`: bricks/paddle/ball as flat rects
+- `programs/demo.cyr` — eyeball harness; dumps `build/frame00..02.ppm`
 
 Planned modules:
-- `src/framebuf.cyr` — `/dev/fb0` framebuffer surface + present (self-rolled)
 - `src/input.cyr` — keyboard (self-rolled)
+- present adapter — blit the offscreen surface to `/dev/fb0` for on-console play
 - `src/level.cyr` — level loading, progression, speed-curve
 - `src/hud.cyr` — score, lives, level indicator
 - `src/audio.cyr` — sound-effect synthesis
@@ -60,7 +63,7 @@ No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art
 
 ## Tests
 
-- `tests/cyrius-bb.tcyr` — **59 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios). Deterministic + headless.
+- `tests/cyrius-bb.tcyr` — **74 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios, framebuf, render). Deterministic + headless.
 - Playtest gate — every milestone requires manual playthrough (feel concerns); pending the render/input/loop bites, the simulation has only the unit-test gate so far.
 
 ## Dependencies

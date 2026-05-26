@@ -28,10 +28,15 @@ Done (headless, 59 assertions green):
 - ✅ `src/bricks.cyr` — brick grid, destruction-on-hit, scoring
 - ✅ `src/world.cyr` — `world_step()`: integrate → wall/paddle/brick collision → score/lives/state
 
+Done (cont.):
+- ✅ `src/framebuf.cyr` — offscreen RGB surface + clipped fill-rect + PPM dump (self-rolled)
+- ✅ `src/render.cyr` — `render_world()`: flat rects; depth treatment deferred to M3
+- ✅ `programs/demo.cyr` — eyeball harness dumping PPM frames
+
 Remaining for M1:
-- `src/framebuf.cyr` — self-rolled `/dev/fb0` framebuffer (cyrius-doom pattern); flat rectangles, depth treatment deferred to M3
 - `src/input.cyr` — keyboard input → paddle motion
-- `src/main.cyr` — game loop (fixed-timestep physics, variable-rate render), basic HUD; drop the mabda smoke test
+- `src/main.cyr` — real-time game loop (fixed-timestep physics, variable-rate render), basic HUD; drop the mabda smoke test
+- present adapter — blit the offscreen surface to `/dev/fb0` for on-console play
 - Placeholder assets — solid-color rectangles, no art pass yet
 
 **Acceptance**: a single-level game is playable end-to-end. Ball bounces off walls + paddle + bricks; bricks destruct on hit; score increments; when all bricks destroyed, "level complete" state fires.

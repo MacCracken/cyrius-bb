@@ -1,0 +1,63 @@
+# demo.cyr — render a few frames of a cyrius-bb world to PPM files.
+#
+# Build: cyrius build programs/demo.cyr build/demo
+# Run:   ./build/demo   (writes build/frame00.ppm .. build/frame02.ppm)
+# View:  any image viewer, or `convert build/frame00.ppm out.png`.
+#
+# A throwaway harness to eyeball the headless simulation + renderer until
+# the real game loop (main.cyr) lands. See ADR 0003.
+
+include "src/fixed.cyr"
+include "src/geom.cyr"
+include "src/ball.cyr"
+include "src/paddle.cyr"
+include "src/bricks.cyr"
+include "src/world.cyr"
+include "src/framebuf.cyr"
+include "src/render.cyr"
+
+fn step_n(wd, n): i64 {
+    var i = 0;
+    while (i < n) {
+        world_step(wd);
+        i = i + 1;
+    }
+    return 0;
+}
+
+fn main() {
+    alloc_init();
+    var f = fb_new(200, 150);
+    # ball heading up-left into the brick field, so the frames show
+    # bricks being destroyed before it returns toward the paddle.
+    var vx = 0 - fixed_from_int(3);
+    var vy = 0 - fixed_from_int(4);
+    var b = ball_new(fixed_from_int(100), fixed_from_int(110), vx, vy, fixed_from_int(3));
+    var p = paddle_new(fixed_from_int(80), fixed_from_int(138), fixed_from_int(40), fixed_from_int(6));
+    var bw = fixed_from_int(22);
+    var bh = fixed_from_int(8);
+    var gap = fixed_from_int(4);
+    var g = bricks_new(7, 4, fixed_from_int(10), fixed_from_int(12), bw, bh, gap, gap, 10);
+    var wd = world_new(b, p, g, fixed_from_int(200), fixed_from_int(150), 3, fixed_from_int(5));
+
+    render_world(f, wd);
+    fb_write_ppm(f, "build/frame00.ppm");
+
+    step_n(wd, 8);
+    render_world(f, wd);
+    fb_write_ppm(f, "build/frame01.ppm");
+
+    step_n(wd, 8);
+    render_world(f, wd);
+    fb_write_ppm(f, "build/frame02.ppm");
+
+    println("cyrius-bb demo: score after 16 ticks =");
+    fmt_int_fd(1, world_score(wd));
+    println("");
+
+    println("cyrius-bb demo: wrote build/frame00.ppm .. frame02.ppm");
+    return 0;
+}
+
+var r = main();
+syscall(60, r);
