@@ -12,7 +12,7 @@
 
 - `cyrius init cyrius-bb` + library-vs-binary decision (binary — game, not library)
 - ADR 0001 (homage-from-observation thesis) + ADR 0002 (original-assets-only policy)
-- Docs scaffolded per [first-party-documentation.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/applications/first-party-documentation.md)
+- Docs scaffolded per [first-party-documentation.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/first-party/first-party-documentation.md)
 
 ### M1 — Foundational loop (v0.2.0)
 

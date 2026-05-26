@@ -5,6 +5,7 @@ Dogfood targets: `cyrius`, `owl`, `cyim`. This is a running log —
 append, don't rewrite.
 
 **Toolchain at last sweep:** cyrius 5.7.11 + cyim 1.1.3 + owl 1.1.6.
+**Pin now at cyrius 6.0.1** (bumped 2026-05-25) — the open `cyrius deps` items below have **not** yet been re-swept against 6.0.1; carried forward pending a real re-run.
 
 ## Status
 
@@ -400,3 +401,15 @@ unchanged.
 - ❌ cyim `--grep` confirmed as literal substring match (not regex) — refined the note with crisper evidence (literal-`^` vs anchor-`^` probe).
 - ✏️ P7 deferred per user feedback to mabda 3.0.1; mabda 3.0 is pure-Cyrius GPU-native pivot.
 - 🎯 cyim `--grep` regex design agreed: ship `--find` (regex search) + `--regex=<flavor>` (flavor selector). User to land later.
+
+### 2026-05-25 — toolchain pin bumped 5.7.11 → 6.0.1 (not yet re-swept)
+
+Pin moved to cyrius `6.0.1` as part of the language + doc-standards
+refresh. This is a **pin bump, not a verification sweep** — the open
+`cyrius deps` items (P1 modules-path validation, P2 `--help` runs
+resolver, P3 deps absent from top-level help, P5 lockfile not
+auto-generated, P8 `--lock` cold regression) were **not** re-run
+against 6.0.1. They are carried forward as-is. Next real sweep should
+re-run each repro against 6.0.1 and reclassify; several may have been
+addressed in the v6.0.0 stdlib/CLI clean-slate but that's unconfirmed
+here. P7 remains deferred to mabda 3.0.1.

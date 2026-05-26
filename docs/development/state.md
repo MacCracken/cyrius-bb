@@ -8,7 +8,7 @@
 
 ## Toolchain
 
-- **Cyrius pin**: `5.7.11` (in `cyrius.cyml [package].cyrius`)
+- **Cyrius pin**: `6.0.1` (in `cyrius.cyml [package].cyrius`) — bumped from `5.7.11` 2026-05-25. All 16 stdlib modules in the dep list resolve against 6.0.1; no manifest changes beyond the pin.
 
 ## Milestones
 

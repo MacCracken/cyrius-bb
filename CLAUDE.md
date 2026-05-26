@@ -15,7 +15,8 @@
 - **Language**: Cyrius (toolchain pinned in `cyrius.cyml [package].cyrius`)
 - **Version**: `VERSION` at the project root is the source of truth
 - **Genesis repo**: [agnosticos](https://github.com/MacCracken/agnosticos)
-- **Standards**: [First-Party Standards](https://github.com/MacCracken/agnosticos/blob/main/docs/development/applications/first-party-standards.md) · [First-Party Documentation](https://github.com/MacCracken/agnosticos/blob/main/docs/development/applications/first-party-documentation.md)
+- **Standards**: [First-Party Standards](https://github.com/MacCracken/agnosticos/blob/main/docs/development/first-party/first-party-standards.md) · [First-Party Documentation](https://github.com/MacCracken/agnosticos/blob/main/docs/development/first-party/first-party-documentation.md)
+- **Shared crates**: [shared-crates.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/planning/shared-crates.md)
 
 ## Goal
 
@@ -108,6 +109,7 @@ CYRIUS_DCE=1 cyrius build src/main.cyr build/cyrius-bb     # release-parity buil
 - [`docs/design/`](docs/design/) — art direction, asset pipeline, palette / audio sourcing
 - [`docs/development/roadmap.md`](docs/development/roadmap.md) — milestone sequence (M0 scaffold → M1 ball/paddle/bricks → M2 levels → M3 2.5D depth pass → M4 audio + polish → v1.0)
 - [`docs/development/state.md`](docs/development/state.md) — live state snapshot
+- [`docs/doc-health.md`](docs/doc-health.md) — fresh / stale / archive ledger across the whole doc tree (lives at `docs/` root, **not** under `development/` — its scope is the whole tree)
 - [`CHANGELOG.md`](CHANGELOG.md) — source of truth for all changes
 
 New quirks and constraints land in `docs/architecture/` as numbered items (`NNN-kebab-case.md`). New decisions land in `docs/adr/` using [`template.md`](docs/adr/template.md). **Never renumber either series.**

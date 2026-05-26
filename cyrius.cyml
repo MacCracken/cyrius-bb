@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "5.7.11"
+cyrius = "6.0.1"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
