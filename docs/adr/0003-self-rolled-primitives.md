@@ -36,9 +36,12 @@ unit-tested headless — following the proven cyrius-doom pattern.
 - **In scope now**: deterministic 16.16 fixed-point math (`src/fixed.cyr`),
   collision + reflection + paddle-english primitives (`src/geom.cyr`), and the
   entity/loop/render/input modules that build on them.
-- **Retained deps**: **sankoch** (high-score compression) and **sigil**
-  (high-score integrity hash) stay — they are M5 save-file concerns, not engine
-  concerns, and have no self-roll justification (don't reinvent crypto/compression).
+- **Retained for M5**: **sankoch** (high-score compression) and **sigil**
+  (high-score integrity hash) — save-file concerns with no self-roll
+  justification (don't reinvent crypto/compression). They are dormant
+  until M5, so they stay commented out in `cyrius.cyml` (an unused dep
+  just adds link warnings + binary weight); uncomment when `src/save.cyr`
+  lands.
 - **Deferred, not deleted**: kiran / impetus / mabda / soorat remain documented
   as the path for later in-depth projects. If a future cyrius-bb feature ever
   genuinely needs one, that's a new decision with its own ADR.

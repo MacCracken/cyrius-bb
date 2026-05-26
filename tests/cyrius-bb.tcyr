@@ -9,6 +9,7 @@ include "src/bricks.cyr"
 include "src/world.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
+include "src/input.cyr"
 
 fn test_smoke() {
     test_group("smoke");
@@ -210,6 +211,32 @@ fn test_render() {
     return 0;
 }
 
+fn test_input() {
+    test_group("input");
+    assert_eq(bb_key_action(97), ACT_LEFT, "'a' -> LEFT");
+    assert_eq(bb_key_action(100), ACT_RIGHT, "'d' -> RIGHT");
+    assert_eq(bb_key_action(32), ACT_LAUNCH, "space -> LAUNCH");
+    assert_eq(bb_key_action(113), ACT_QUIT, "'q' -> QUIT");
+    assert_eq(bb_key_action(27), ACT_QUIT, "ESC -> QUIT");
+    assert_eq(bb_key_action(120), 0, "'x' -> no action");
+    return 0;
+}
+
+fn test_world_serve() {
+    test_group("world serve");
+    var b = ball_new(fixed_from_int(100), fixed_from_int(204), 0, fixed_from_int(2), fixed_from_int(2));
+    var p = paddle_new(0, fixed_from_int(195), fixed_from_int(20), fixed_from_int(4));
+    var g = bricks_new(1, 1, fixed_from_int(10), fixed_from_int(10), fixed_from_int(8), fixed_from_int(4), 0, 0, 10);
+    var wd = world_new(b, p, g, fixed_from_int(200), fixed_from_int(200), 3, fixed_from_int(4));
+    world_step(wd);
+    assert_eq(world_state(wd), WS_BALL_LOST, "ball lost first");
+    world_serve(wd, fixed_from_int(100), fixed_from_int(100), fixed_from_int(1), 0 - fixed_from_int(3));
+    assert_eq(world_state(wd), WS_PLAYING, "serve resumes play");
+    assert_eq(ball_y(world_ball(wd)), fixed_from_int(100), "ball repositioned");
+    assert_eq(ball_vy(world_ball(wd)), 0 - fixed_from_int(3), "ball re-served velocity");
+    return 0;
+}
+
 fn main() {
     alloc_init();
     test_smoke();
@@ -226,6 +253,8 @@ fn main() {
     test_world_clear();
     test_framebuf();
     test_render();
+    test_input();
+    test_world_serve();
     return assert_summary();
 }
 

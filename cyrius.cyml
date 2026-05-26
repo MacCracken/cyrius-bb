@@ -56,20 +56,28 @@ stdlib = [
     "assert",
 ]
 
-[deps.mabda]
-git = "https://github.com/MacCracken/mabda.git"
-tag = "2.5.0"
-modules = ["dist/mabda.cyr"]
+# mabda (GPU rendering) deferred per ADR 0003 — cyrius-bb self-rolls its
+# renderer (src/framebuf.cyr + src/render.cyr) on a /dev/fb0 framebuffer.
+# Re-enable only if a real 2.5D depth pass (M3) ever justifies the GPU
+# path. Kept here (commented) so the wiring is one uncomment away.
+# [deps.mabda]
+# git = "https://github.com/MacCracken/mabda.git"
+# tag = "2.5.0"
+# modules = ["dist/mabda.cyr"]
 
-[deps.sankoch]
-git = "https://github.com/MacCracken/sankoch.git"
-tag = "2.1.0"
-modules = ["dist/sankoch.cyr"]
-
-[deps.sigil]
-git = "https://github.com/MacCracken/sigil.git"
-tag = "2.9.3"
-modules = ["dist/sigil.cyr"]
+# sankoch (compression) + sigil (integrity hash) are the M5 high-score
+# save-file deps (ADR 0003 — we use them, don't self-roll crypto/zip).
+# They are dormant until M5, so they stay commented to keep the build
+# warning-free; uncomment when src/save.cyr lands.
+# [deps.sankoch]
+# git = "https://github.com/MacCracken/sankoch.git"
+# tag = "2.1.0"
+# modules = ["dist/sankoch.cyr"]
+#
+# [deps.sigil]
+# git = "https://github.com/MacCracken/sigil.git"
+# tag = "2.9.3"
+# modules = ["dist/sigil.cyr"]
 
 # ── Pending deps: not yet wireable ───────────────────────────────────
 # kiran and impetus are Rust today; they need porting to Cyrius before

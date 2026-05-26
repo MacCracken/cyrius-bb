@@ -1,19 +1,109 @@
-# cyrius-bb — main entry point
-# Stdlib auto-included via cyrius.cyml; mabda/sankoch/sigil via [deps.NAME]
+# cyrius-bb — main entry. Self-rolled, no engine deps (see ADR 0003).
+#
+# Two modes:
+#   cyrius-bb            interactive — raw-tty input + /dev/fb0 present,
+#                        ~60 fps loop until quit / game over / level clear
+#   cyrius-bb <frames>   headless smoke — step N ticks, dump a PPM, print
+#                        score + bricks remaining (CI-friendly, no I/O)
+#
+# stdlib auto-included via cyrius.cyml; project modules included below
+# in dependency order.
 
-fn main() {
-    alloc_init();
+include "src/fixed.cyr"
+include "src/geom.cyr"
+include "src/ball.cyr"
+include "src/paddle.cyr"
+include "src/bricks.cyr"
+include "src/world.cyr"
+include "src/framebuf.cyr"
+include "src/render.cyr"
+include "src/input.cyr"
+include "src/present.cyr"
+include "src/tick.cyr"
 
-    # Smoke test the mabda dep — no window required, just prove the
-    # include path resolves and we can call into the bundle. M1-proper
-    # blocks on soorat (windowing) + kiran (engine) being ported from
-    # Rust; until then, mabda's compute / pure-helper surface is all
-    # we can exercise.
-    var name = gpu_err_name(GPU_ERR_NONE);
-    println("cyrius-bb: mabda link OK — gpu_err_name(0)=");
-    println(name);
+enum Game {
+    AREA_W = 200;
+    AREA_H = 150;
+    START_LIVES = 3;
+}
+
+fn build_world(): i64 {
+    var vx = fixed_from_int(3);
+    var vy = 0 - fixed_from_int(4);
+    var b = ball_new(fixed_from_int(100), fixed_from_int(110), vx, vy, fixed_from_int(3));
+    var p = paddle_new(fixed_from_int(80), fixed_from_int(138), fixed_from_int(40), fixed_from_int(6));
+    var bw = fixed_from_int(22);
+    var bh = fixed_from_int(8);
+    var gap = fixed_from_int(4);
+    var g = bricks_new(7, 4, fixed_from_int(10), fixed_from_int(12), bw, bh, gap, gap, 10);
+    return world_new(b, p, g, fixed_from_int(AREA_W), fixed_from_int(AREA_H), START_LIVES, fixed_from_int(5));
+}
+
+fn serve(wd): i64 {
+    return world_serve(wd, fixed_from_int(100), fixed_from_int(110), fixed_from_int(3), 0 - fixed_from_int(4));
+}
+
+# Headless smoke: step N ticks (auto-serving on loss), dump one frame,
+# print final score + bricks remaining. No tty / framebuffer touched.
+fn run_headless(frames): i64 {
+    var wd = build_world();
+    var f = fb_new(AREA_W, AREA_H);
+    var i = 0;
+    var st = 0;
+    while (i < frames) {
+        st = world_step(wd);
+        if (st == WS_BALL_LOST) { serve(wd); }
+        i = i + 1;
+    }
+    render_world(f, wd);
+    fb_write_ppm(f, "build/cyrius-bb-headless.ppm");
+    println("cyrius-bb headless smoke — score / bricks-remaining:");
+    fmt_int_fd(1, world_score(wd));
+    file_write(1, " ", 1);
+    fmt_int_fd(1, bricks_alive_count(world_bricks(wd)));
+    file_write(1, "\n", 1);
     return 0;
 }
 
+# Interactive: ~60 fps loop. a/left and d/right move the paddle, q/ESC
+# quits. Renders to an offscreen surface and blits to /dev/fb0 (a no-op
+# when no framebuffer is available).
+fn run_interactive(): i64 {
+    var wd = build_world();
+    var f = fb_new(AREA_W, AREA_H);
+    input_init();
+    fb_present_open(f);
+    var dx = fixed_from_int(4);
+    var maxx = fixed_from_int(AREA_W);
+    var running = 1;
+    var act = 0;
+    var st = 0;
+    while (running == 1) {
+        frame_sleep();
+        act = input_poll();
+        if ((act & ACT_QUIT) != 0) { running = 0; }
+        if ((act & ACT_LEFT) != 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
+        if ((act & ACT_RIGHT) != 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
+        st = world_step(wd);
+        if (st == WS_BALL_LOST) { serve(wd); }
+        if (st == WS_GAME_OVER) { running = 0; }
+        if (st == WS_LEVEL_CLEAR) { running = 0; }
+        render_world(f, wd);
+        fb_present_blit(f);
+    }
+    fb_present_close();
+    input_shutdown();
+    return 0;
+}
+
+fn main(): i64 {
+    alloc_init();
+    args_init();
+    if (argc() >= 2) {
+        return run_headless(atoi(argv(1)));
+    }
+    return run_interactive();
+}
+
 var r = main();
-syscall(SYS_EXIT, r);
+syscall(60, r);

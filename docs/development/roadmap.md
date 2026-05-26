@@ -33,10 +33,15 @@ Done (cont.):
 - ✅ `src/render.cyr` — `render_world()`: flat rects; depth treatment deferred to M3
 - ✅ `programs/demo.cyr` — eyeball harness dumping PPM frames
 
+Done (cont.):
+- ✅ `src/input.cyr` — raw-tty keyboard (a/d/arrows/space/q) + pure decoder
+- ✅ `src/tick.cyr` — ~60 fps frame pacing
+- ✅ `src/present.cyr` — best-effort `/dev/fb0` blit (on-console)
+- ✅ `src/main.cyr` — real-time loop (tick → input → step → render → present) + headless `<frames>` smoke; mabda smoke test dropped, build now bare-stdlib
+
 Remaining for M1:
-- `src/input.cyr` — keyboard input → paddle motion
-- `src/main.cyr` — real-time game loop (fixed-timestep physics, variable-rate render), basic HUD; drop the mabda smoke test
-- present adapter — blit the offscreen surface to `/dev/fb0` for on-console play
+- `src/hud.cyr` — score / lives / level overlay (digits drawn as rects or a tiny bitmap font)
+- `/dev/fb0` present verification on a real Linux console (untestable under this desktop session)
 - Placeholder assets — solid-color rectangles, no art pass yet
 
 **Acceptance**: a single-level game is playable end-to-end. Ball bounces off walls + paddle + bricks; bricks destruct on hit; score increments; when all bricks destroyed, "level complete" state fires.

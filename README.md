@@ -19,17 +19,16 @@ Same shape as [cyrius-doom](https://github.com/MacCracken/cyrius-doom), [cyrius-
 
 ## Dependencies
 
-All first-party, all Cyrius-native (folded into stdlib):
+**Bare Cyrius stdlib — zero external deps.** Per [ADR 0003](docs/adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives (fixed-point math, collision, game loop, framebuffer, input) rather than depending on the heavier game stack, following the proven cyrius-doom pattern. An Atari-scope brick-breaker doesn't need an ECS engine or a rigid-body physics crate.
 
-| Subsystem | Purpose |
-|-----------|---------|
-| [mabda](https://github.com/MacCracken/mabda) | GPU rendering (2.5D sprite + parallax depth) |
-| [kiran](https://github.com/MacCracken/kiran) | Game engine (ECS, scene hierarchy, input) |
-| [impetus](https://github.com/MacCracken/impetus) | Physics (ball-brick-paddle collision, velocity curves) |
-| [shravan](https://github.com/MacCracken/shravan) | Audio codec (sound effects, level music) |
-| [hisab](https://github.com/MacCracken/hisab) | Vector / transform math |
-| [sankoch](https://github.com/MacCracken/sankoch) | High-score file compression |
-| [sigil](https://github.com/MacCracken/sigil) | High-score integrity hash |
+Two first-party crates are earmarked for later milestones (commented out in `cyrius.cyml` until then):
+
+| Crate | Purpose | When |
+|-------|---------|------|
+| [sankoch](https://github.com/MacCracken/sankoch) | High-score file compression | M5 |
+| [sigil](https://github.com/MacCracken/sigil) | High-score integrity hash | M5 |
+
+Deferred to later, more in-depth projects (not this one): [mabda](https://github.com/MacCracken/mabda) (GPU), [kiran](https://github.com/MacCracken/kiran) (engine), [impetus](https://github.com/MacCracken/impetus) (physics).
 
 No C. No FFI. Cyrius stdlib end to end.
 
@@ -38,12 +37,14 @@ No C. No FFI. Cyrius stdlib end to end.
 ```sh
 cyrius deps
 cyrius build src/main.cyr build/cyrius-bb
-cyrius test src/test.cyr
+cyrius test tests/cyrius-bb.tcyr        # 84 assertions, headless + deterministic
+./build/cyrius-bb 90                    # headless smoke: step 90 ticks, dump a PPM, print score
+./build/cyrius-bb                       # interactive (Linux console — a/d move, q quits)
 ```
 
 ## Status
 
-**0.1.0 — scaffold.** Module skeletons + ADR 0001 (homage-from-observation) + ADR 0002 (original-assets policy) landed first. M1 (ball + paddle + single brick layer) is the foundation; the rest layers on. See [`docs/development/roadmap.md`](docs/development/roadmap.md).
+**0.1.0 released; M1 (playable loop) on the dev tip.** The full game runs headless and deterministic — ball/paddle/brick physics, paddle english, scoring, lives, level-clear/game-over — plus a self-rolled offscreen renderer (with a `/dev/fb0` present for console play) and raw-tty input. Built on bare stdlib per [ADR 0003](docs/adr/0003-self-rolled-primitives.md). Remaining M1 polish: a HUD and on-console `/dev/fb0` verification. See [`docs/development/roadmap.md`](docs/development/roadmap.md).
 
 ## License
 
