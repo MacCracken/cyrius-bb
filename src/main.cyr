@@ -216,20 +216,18 @@ fn run_headless(frames): i64 {
 # Interactive: ~60 fps loop. a/left and d/right move the paddle, q/ESC
 # quits. Renders to an offscreen surface and blits to /dev/fb0 (a no-op
 # when no framebuffer is available).
-fn run_interactive(): i64 {
+# Play one game start to finish (fresh world + fx each call). 'p' pauses
+# (sim frozen, PAUSED shown); a natural finish offers a high-score entry.
+# Returns to the caller (the menu) when the game ends or the player quits.
+fn play_game(f, scores): i64 {
     var wd = build_world();
-    var f = fb_new(AREA_W, AREA_H);
     var fx = fx_new(FX_CAP);
-    var scores = hs_new();
-    hs_load(scores);
-    input_init();
-    fb_present_open(f);
-    sound_open();
     var dx = fixed_from_int(4);
     var maxx = fixed_from_int(AREA_W);
     var level = 0;
     var running = 1;
     var completed = 0; # finished naturally (game over / all levels) vs quit
+    var paused = 0;
     var act = 0;
     var st = 0;
     while (running == 1) {
@@ -237,27 +235,99 @@ fn run_interactive(): i64 {
         act = input_poll();
         if ((act & ACT_QUIT) != 0) { running = 0; }
         if ((act & ACT_MUTE) != 0) { audio_toggle_mute(); }
-        if ((act & ACT_LEFT) != 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
-        if ((act & ACT_RIGHT) != 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
-        st = world_step(wd);
-        spawn_fx(fx, wd);
-        play_event_sfx(wd);
-        if (st == WS_BALL_LOST) { sound_play(SFX_LOST); serve(wd, level); }
-        if (st == WS_GAME_OVER) { sound_play(SFX_OVER); completed = 1; running = 0; }
-        if (st == WS_LEVEL_CLEAR) {
-            # last level cleared -> game complete; otherwise load the next
-            sound_play(SFX_FANFARE);
-            if (level + 1 >= level_count()) { completed = 1; running = 0; }
-            else { level = advance_level(wd, level); }
+        if ((act & ACT_PAUSE) != 0) { paused = 1 - paused; }
+        if (paused == 0) {
+            if ((act & ACT_LEFT) != 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
+            if ((act & ACT_RIGHT) != 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
+            st = world_step(wd);
+            spawn_fx(fx, wd);
+            play_event_sfx(wd);
+            if (st == WS_BALL_LOST) { sound_play(SFX_LOST); serve(wd, level); }
+            if (st == WS_GAME_OVER) { sound_play(SFX_OVER); completed = 1; running = 0; }
+            if (st == WS_LEVEL_CLEAR) {
+                # last level cleared -> game complete; otherwise load the next
+                sound_play(SFX_FANFARE);
+                if (level + 1 >= level_count()) { completed = 1; running = 0; }
+                else { level = advance_level(wd, level); }
+            }
+            fx_step(fx);
         }
-        fx_step(fx);
         render_world(f, wd);
         fx_render(f, fx);
         hud_render(f, wd);
+        if (paused == 1) { hud_draw_text(f, 76, 66, "PAUSED", 2, 240, 240, 120); }
         fb_present_blit(f);
     }
     # natural finish (not a quit) may earn a high-score entry
     if (completed == 1) { post_game(f, scores, world_score(wd)); }
+    return 0;
+}
+
+enum Menu {
+    MENU_PLAY = 0;
+    MENU_SCORES = 1;
+    MENU_QUIT = 2;
+    MENU_COUNT = 3;
+}
+
+# Move a menu selection by delta with wraparound. Pure.
+fn menu_move(sel, delta, count): i64 {
+    var s = sel + delta;
+    while (s < 0) { s = s + count; }
+    while (s >= count) { s = s - count; }
+    return s;
+}
+
+# Console-only: title + PLAY / HIGH SCORES / QUIT with a cursor on `sel`.
+fn render_menu(f, sel): i64 {
+    fb_clear(f, 12, 12, 30);
+    hud_draw_text(f, 34, 22, "BREAK BREAKER", 3, 240, 220, 80);
+    hud_draw_text(f, 58, 70, "PLAY", 2, 220, 220, 240);
+    hud_draw_text(f, 58, 92, "HIGH SCORES", 2, 220, 220, 240);
+    hud_draw_text(f, 58, 114, "QUIT", 2, 220, 220, 240);
+    fb_fill_rect(f, 44, 70 + sel * 22, 6, 10, 240, 220, 80); # cursor
+    hud_draw_text(f, 24, 138, "WS MOVE  ENTER SELECT", 1, 140, 140, 170);
+    return 0;
+}
+
+# Console-only: run the title menu until the player picks an item; return
+# the chosen MENU_* (BACK/q -> QUIT).
+fn menu_loop(f, scores): i64 {
+    var sel = 0;
+    var nav = 0;
+    var pick = 0 - 1;
+    while (pick < 0) {
+        frame_sleep();
+        render_menu(f, sel);
+        fb_present_blit(f);
+        nav = input_nav();
+        if (nav == NAV_UP) { sel = menu_move(sel, 0 - 1, MENU_COUNT); }
+        if (nav == NAV_DOWN) { sel = menu_move(sel, 1, MENU_COUNT); }
+        if (nav == NAV_BACK) { pick = MENU_QUIT; }
+        if (nav == NAV_SELECT) { pick = sel; }
+    }
+    return pick;
+}
+
+fn run_interactive(): i64 {
+    var f = fb_new(AREA_W, AREA_H);
+    var scores = hs_new();
+    hs_load(scores);
+    input_init();
+    fb_present_open(f);
+    sound_open();
+    var running = 1;
+    var choice = 0;
+    while (running == 1) {
+        choice = menu_loop(f, scores);
+        if (choice == MENU_QUIT) { running = 0; }
+        if (choice == MENU_SCORES) {
+            render_scores(f, scores);
+            fb_present_blit(f);
+            wait_key();
+        }
+        if (choice == MENU_PLAY) { play_game(f, scores); }
+    }
     fb_present_close();
     sound_close();
     input_shutdown();

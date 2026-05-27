@@ -15,6 +15,15 @@ enum InputAction {
     ACT_LAUNCH = 4;
     ACT_QUIT = 8;
     ACT_MUTE = 16;
+    ACT_PAUSE = 32;
+}
+
+enum NavAction {
+    NAV_NONE = 0;
+    NAV_UP = 1;
+    NAV_DOWN = 2;
+    NAV_SELECT = 3;
+    NAV_BACK = 4;
 }
 
 enum TermConst {
@@ -33,6 +42,7 @@ fn bb_key_action(ch): i64 {
     if (ch == 113) { return ACT_QUIT; }     # 'q'
     if (ch == 27) { return ACT_QUIT; }      # lone ESC
     if (ch == 109) { return ACT_MUTE; }     # 'm'
+    if (ch == 112) { return ACT_PAUSE; }    # 'p'
     return 0;
 }
 
@@ -109,4 +119,45 @@ fn input_read_byte(): i64 {
     var n = syscall(0, 0, &b, 1);
     if (n <= 0) { return 0 - 1; }
     return load8(&b);
+}
+
+# Read available bytes; return the first menu nav action found. w/k/up ->
+# UP, s/j/down -> DOWN, enter/space -> SELECT, q/ESC -> BACK; NAV_NONE if
+# nothing. Non-blocking. Not unit-tested (no controlling terminal in CI).
+fn input_nav(): i64 {
+    var buf[32];
+    var n = syscall(0, 0, &buf, 32);
+    if (n <= 0) { return NAV_NONE; }
+    var pos = 0;
+    var ch = 0;
+    var s1 = 0;
+    var s2 = 0;
+    while (pos < n) {
+        ch = load8(&buf + pos);
+        if (ch == 27) {
+            s1 = 0;
+            s2 = 0;
+            if (pos + 2 < n) {
+                s1 = load8(&buf + pos + 1);
+                s2 = load8(&buf + pos + 2);
+            }
+            if (s1 == 91) {
+                if (s2 == 65) { return NAV_UP; }
+                if (s2 == 66) { return NAV_DOWN; }
+                pos = pos + 3;
+                continue;
+            }
+            return NAV_BACK;
+        }
+        if (ch == 119) { return NAV_UP; }
+        if (ch == 107) { return NAV_UP; }
+        if (ch == 115) { return NAV_DOWN; }
+        if (ch == 106) { return NAV_DOWN; }
+        if (ch == 10) { return NAV_SELECT; }
+        if (ch == 13) { return NAV_SELECT; }
+        if (ch == 32) { return NAV_SELECT; }
+        if (ch == 113) { return NAV_BACK; }
+        pos = pos + 1;
+    }
+    return NAV_NONE;
 }

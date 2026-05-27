@@ -86,13 +86,20 @@ First milestone to USE the shared crates (ADR 0003): sankoch + sigil wired from 
 - The score-entry + high-score screens are first-pass console UI (untested in CI, like the loop); their layout/feel + the game-over→menu flow land in M6.
 - Binary size (~4x) accepted as the honest cost of real compression + crypto.
 
-### M6 — Polish (v0.9.0)
+### M6 — Polish (v0.7.0) — ✅ shipped 2026-05-26
 
-- Menu screen (title, play, high scores, quit)
-- Pause functionality
-- Screen-size / windowed-mode handling
-- Final art pass — any placeholder assets replaced with their final original versions per ADR 0002
-- Accessibility pass — keyboard-only play, color-blind-friendly brick colors
+> Cut as v0.7.0 (not the originally-pinned v0.9.0) — the 0.7/0.8 headroom
+> was unneeded once M1–M5 landed fast; v1.0 still targets 2026-06-13.
+
+- ✅ Menu screen (title / play / high scores / quit) — `menu_loop` in `main.cyr`, keyboard nav
+- ✅ Pause ('p') — sim frozen + PAUSED overlay
+- ✅ Screen-size handling — `present.cyr` probes the framebuffer geometry and integer-scales + centres (no windowed mode: it's a `/dev/fb0` console target, not a window system)
+- ✅ Final art pass — procedural, per ADR 0002 (no asset files): beveled bricks, rounded highlighted ball, lit-edge paddle (`render.cyr`)
+- ✅ Accessibility — keyboard-only play + menus; bevel shape-cue + row-position disambiguate tiers beyond hue (full CVD repalette left as a playtest tweak)
+
+199 headless assertions; DCE binary **460,384 B**. Detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.7.0]`.
+
+**Carried forward** (the pre-v1.0 gate): full console playthrough of the flow + `/dev/fb0` scale/centre verification (the riskiest untested path) + audible `/dev/dsp` + feel tuning + camera-shake decision. See `state.md` Next.
 
 ### v1.0 — Ship (**2026-06-13 — Saturday**)
 

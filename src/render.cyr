@@ -1,11 +1,12 @@
 # render.cyr — draw a world onto an offscreen framebuffer. See ADR 0003.
 #
-# M3 2.5D depth treatment (still no 3D engine — orthogonal 2D + depth
-# *cues*): a parallax background (depth zones + two bar layers that
-# shift at different rates with the ball), per-tier brick colour, and a
-# 2px extrusion shadow so bricks read as raised blocks. Transient
-# debris/collapse particles are a separate layer (src/fx.cyr), drawn
-# over this by the main loop.
+# 2.5D depth treatment (still no 3D engine — orthogonal 2D + depth
+# *cues*): a parallax background (depth zones + two bar layers that shift
+# at different rates with the ball) and per-tier brick colour (M3); plus
+# the M6 art pass — beveled bricks (lit top/left edge + extrusion shadow),
+# a rounded highlighted ball, and a lit-edge paddle. Transient debris /
+# collapse particles are a separate layer (src/fx.cyr), drawn over this
+# by the main loop.
 #
 # Converts 16.16 fixed-point world coords to integer pixels via
 # fixed_to_int. Requires (include order): fixed, ball, paddle, bricks,
@@ -37,6 +38,13 @@ fn rgb_r(c): i64 { return (c >> 16) & 255; }
 fn rgb_g(c): i64 { return (c >> 8) & 255; }
 fn rgb_b(c): i64 { return c & 255; }
 
+# Channel + amt, clamped to 255 — for highlight edges (the bevel).
+fn lighten(c, amt): i64 {
+    var v = c + amt;
+    if (v > 255) { v = 255; }
+    return v;
+}
+
 # One parallax bar layer: vertical bars `barw` wide repeating every
 # `period`, the whole field shifted left by `shift` px (shift >= 0).
 # Bars are full height; the caller picks bigger shifts for nearer layers.
@@ -67,9 +75,34 @@ fn render_bg(f, wd): i64 {
     return 0;
 }
 
-# Draw one frame of the world over the parallax background. Bricks are
-# tier-coloured with a 2px bottom-right extrusion shadow; paddle green;
-# ball white.
+# Draw a beveled brick: bottom-right extrusion shadow, tier-coloured face,
+# then a 1px lit top + left edge (raised-block look).
+fn draw_brick(f, x, y, w, h, c): i64 {
+    fb_fill_rect(f, x + 2, y + 2, w, h, 10, 10, 18);
+    fb_fill_rect(f, x, y, w, h, rgb_r(c), rgb_g(c), rgb_b(c));
+    fb_fill_rect(f, x, y, w, 1, lighten(rgb_r(c), 70), lighten(rgb_g(c), 70), lighten(rgb_b(c), 70));
+    fb_fill_rect(f, x, y, 1, h, lighten(rgb_r(c), 70), lighten(rgb_g(c), 70), lighten(rgb_b(c), 70));
+    return 0;
+}
+
+# Draw the ball: a rounded square (corners dropped) plus a top-left
+# highlight pixel, so it reads as a lit sphere rather than a block.
+fn draw_ball(f, cx, cy, d): i64 {
+    fb_fill_rect(f, cx + 1, cy, d - 2, d, 235, 235, 245);   # vertical bar
+    fb_fill_rect(f, cx, cy + 1, d, d - 2, 235, 235, 245);   # horizontal bar
+    fb_fill_rect(f, cx + 1, cy + 1, 2, 2, 255, 255, 255);   # highlight
+    return 0;
+}
+
+# Draw the paddle: a green body with a bright top edge (gentle gradient).
+fn draw_paddle(f, x, y, w, h): i64 {
+    fb_fill_rect(f, x, y, w, h, 64, 168, 72);     # body
+    fb_fill_rect(f, x, y, w, 1, 150, 240, 150);   # lit top edge
+    return 0;
+}
+
+# Draw one frame of the world over the parallax background: beveled
+# tier-coloured bricks, a lit paddle, and a rounded highlighted ball.
 fn render_world(f, wd): i64 {
     render_bg(f, wd);
 
@@ -78,32 +111,20 @@ fn render_world(f, wd): i64 {
     var bh = fixed_to_int(bricks_brick_h(g));
     var total = bricks_total(g);
     var i = 0;
-    var bx = 0;
-    var by = 0;
-    var c = 0;
     while (i < total) {
         if (brick_alive(g, i) == 1) {
-            bx = fixed_to_int(brick_x(g, i));
-            by = fixed_to_int(brick_y(g, i));
-            c = tier_rgb(brick_tier(g, i));
-            fb_fill_rect(f, bx + 2, by + 2, bw, bh, 10, 10, 18);          # extrusion shadow
-            fb_fill_rect(f, bx, by, bw, bh, rgb_r(c), rgb_g(c), rgb_b(c)); # face
+            draw_brick(f, fixed_to_int(brick_x(g, i)), fixed_to_int(brick_y(g, i)), bw, bh, tier_rgb(brick_tier(g, i)));
         }
         i = i + 1;
     }
 
     var p = world_paddle(wd);
-    var px = fixed_to_int(paddle_x(p));
-    var py = fixed_to_int(paddle_y(p));
-    var pw = fixed_to_int(paddle_w(p));
-    var ph = fixed_to_int(paddle_h(p));
-    fb_fill_rect(f, px, py, pw, ph, 80, 200, 80);
+    draw_paddle(f, fixed_to_int(paddle_x(p)), fixed_to_int(paddle_y(p)),
+    fixed_to_int(paddle_w(p)), fixed_to_int(paddle_h(p)));
 
     var b = world_ball(wd);
     var rr = fixed_to_int(ball_r(b));
-    var cx = fixed_to_int(ball_x(b)) - rr;
-    var cy = fixed_to_int(ball_y(b)) - rr;
-    fb_fill_rect(f, cx, cy, rr + rr, rr + rr, 240, 240, 240);
+    draw_ball(f, fixed_to_int(ball_x(b)) - rr, fixed_to_int(ball_y(b)) - rr, rr + rr);
 
     return 0;
 }

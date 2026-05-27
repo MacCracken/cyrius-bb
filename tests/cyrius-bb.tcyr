@@ -208,18 +208,23 @@ fn test_render() {
     var g = bricks_new(2, 1, fixed_from_int(4), fixed_from_int(4), fixed_from_int(8), fixed_from_int(4), fixed_from_int(2), 0, 10);
     var wd = world_new(b, p, g, fixed_from_int(40), fixed_from_int(30), 3, fixed_from_int(4));
     render_world(f, wd);
-    # brick face is the tier-1 colour (full RGB), not a flat red
-    assert_eq(fb_get(f, 4, 4, 0), rgb_r(tier_rgb(1)), "brick face R = tier 1");
-    assert_eq(fb_get(f, 4, 4, 1), rgb_g(tier_rgb(1)), "brick face G = tier 1");
-    assert_eq(fb_get(f, 4, 4, 2), rgb_b(tier_rgb(1)), "brick face B = tier 1");
+    # beveled brick: lit top-left edge over a tier-coloured interior face
+    assert_eq(fb_get(f, 4, 4, 0), lighten(rgb_r(tier_rgb(1)), 70), "brick top-left bevel highlight");
+    assert_eq(fb_get(f, 6, 5, 0), rgb_r(tier_rgb(1)), "brick interior face R = tier 1");
+    assert_eq(fb_get(f, 6, 5, 1), rgb_g(tier_rgb(1)), "brick interior face G = tier 1");
+    assert_eq(fb_get(f, 6, 5, 2), rgb_b(tier_rgb(1)), "brick interior face B = tier 1");
     # 2px extrusion shadow shows past the face's bottom-right edge
     assert_eq(fb_get(f, 12, 8, 0), 10, "brick extrusion shadow");
-    assert_eq(fb_get(f, 11, 26, 1), 200, "paddle pixel is green");
-    assert_eq(fb_get(f, 20, 15, 0), 240, "ball pixel is white");
+    # paddle: lit top edge over a green body
+    assert_eq(fb_get(f, 11, 26, 1), 240, "paddle lit top edge");
+    assert_eq(fb_get(f, 11, 27, 1), 168, "paddle body green");
+    # ball: rounded body + bright highlight
+    assert_eq(fb_get(f, 20, 16, 0), 235, "ball body");
+    assert_eq(fb_get(f, 19, 14, 0), 255, "ball highlight");
     # destroyed brick no longer paints its tier colour
     brick_destroy(g, 0);
     render_world(f, wd);
-    assert_eq(fb_get(f, 4, 4, 0) != rgb_r(tier_rgb(1)), 1, "destroyed brick -> not tier colour");
+    assert_eq(fb_get(f, 6, 5, 0) != rgb_r(tier_rgb(1)), 1, "destroyed brick interior -> not tier");
     return 0;
 }
 

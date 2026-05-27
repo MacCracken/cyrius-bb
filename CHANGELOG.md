@@ -4,6 +4,52 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-05-26
+
+**M6 — polish.** A title menu, pause, a beveled art pass, and a
+framebuffer that adapts to real console resolutions — the last milestone
+before v1.0; all core systems already exist, so this is presentation.
+199 headless assertions (was 196). DCE release binary: **460,384 bytes**
+(was 454,352 at 0.6.0; +6 KB for menu/art/present).
+
+### Added
+- `main.cyr` — a title-screen state machine: **menu** (BREAK BREAKER /
+  PLAY / HIGH SCORES / QUIT, w-s + Enter nav via `input_nav`, `menu_move`
+  wraparound) that returns to itself after each game; **pause** ('p'
+  freezes the sim + shows PAUSED); the game loop is now `play_game` (fresh
+  world + fx per game). High-score view reuses `render_scores`.
+- `render.cyr` — final art pass (procedural, no asset files, per ADR
+  0002): `draw_brick` beveled (lit top/left edge + the existing extrusion
+  shadow → raised block), `draw_ball` rounded with a highlight (reads as a
+  lit sphere), `draw_paddle` with a lit top edge. `lighten()` helper.
+- `present.cyr` — **probes the real framebuffer geometry**
+  (FBIOGET_VSCREENINFO / FSCREENINFO) and integer-scales + centres the
+  surface, so it renders correctly on a normal console (e.g. 1920x1080)
+  instead of filling only the top-left corner. Still best-effort / not
+  CI-tested; graceful no-op without `/dev/fb0`.
+- `input.cyr` — `input_nav` (menu navigation, arrow + w/s/Enter/q decode)
+  and `ACT_PAUSE` ('p').
+- `tests/` — `test_render` updated for the beveled/rounded art (bevel
+  highlight, interior face, paddle edge + body, ball body + highlight). 3
+  net new assertions.
+
+### Accessibility
+- Keyboard-only play (already true) is now also keyboard-only menus.
+- Brick legibility no longer rests on hue alone: the bevel adds a
+  shape/highlight cue and tier maps to row position, so colour-blind
+  players can distinguish rows even where hues are close. The 9-tier
+  palette keeps brightness variation; a full CVD-optimized repalette is a
+  playtest-gated tweak, not done here.
+
+**Carried forward** (the pre-v1.0 playtest gate — you're driving this):
+- Console playthrough of the whole flow (menu → play → pause → game over →
+  high-score entry → menu) on a real Linux console + `/dev/dsp` audio.
+  Tune feel (depth/SFX/speed), verify the framebuffer scale/centre on the
+  actual console resolution, and decide camera shake. `present.cyr`'s
+  ioctl path is the highest-risk untested code — most likely to need a
+  morning fix.
+- Binary size (~460 KB) unchanged in character from M5 ([note 002](docs/architecture/002-save-deps-binary-size.md)).
+
 ## [0.6.0] — 2026-05-26
 
 **M5 — high-score persistence.** A top-10 table with 3-letter initials,

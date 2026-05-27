@@ -4,12 +4,12 @@
 
 ## Version
 
-**0.6.0** — M5 (high-score persistence) complete. Top-10 table with 3-letter initials at `~/.cyrius-bb/scores.cyb`: sankoch-compressed + sigil-HMAC-SHA256 integrity-hashed, tamper-rejecting. First milestone to USE the shared crates rather than self-roll (ADR 0003). Built on M1 loop + M2 levels + M3 depth + M4 audio. (Prior: 0.5.0 — M4 audio; 0.4.0 — M3 depth; 0.3.0 — M2 levels; 0.2.0 — M1 loop; 0.1.0 — scaffold.)
+**0.7.0** — M6 (polish) complete. Title menu (play / high scores / quit), pause, a beveled procedural art pass, and a framebuffer that probes + scales to real console resolutions. Last milestone before v1.0 — all core systems already existed, so this is presentation. Built on M1 loop + M2 levels + M3 depth + M4 audio + M5 scores. (Prior: 0.6.0 — M5 scores; 0.5.0 — M4 audio; 0.4.0 — M3 depth; 0.3.0 — M2 levels; 0.2.0 — M1 loop; 0.1.0 — scaffold.)
 
-- **DCE binary**: 454,352 B (x86_64, static, stripped) — up from 117,184 B at 0.5.0. The ~4x jump is the cost of compiling in sankoch + sigil; DCE can't trim them (see [architecture note 002](../architecture/002-save-deps-binary-size.md)). The bare-stdlib milestones (M1–M4) stayed ~100 KB; M5 integrates the heavyweight crates by design.
-- **Tests**: 196 assertions, 0 failed (was 166). Lint + fmt clean. Disk round-trip verified out-of-band (save→reload across processes; hand-edit → rejected; first-run → graceful).
+- **DCE binary**: 460,384 B (x86_64, static, stripped) — up from 454,352 B at 0.6.0 (+6 KB for menu/art/present). The bulk remains the M5 sankoch + sigil cost ([note 002](../architecture/002-save-deps-binary-size.md)); M1–M4 were ~100 KB bare-stdlib.
+- **Tests**: 199 assertions, 0 failed (was 196). Lint + fmt clean.
 - **Deps**: stdlib + sankoch + sigil (+ transitive freelist/bigint/ct/keccak), all from the 6.0.1 toolchain snapshot — no git fetch. shravan stays deferred (no consumable bundle; audio self-rolled).
-- **Caveat**: interactive loop + `/dev/fb0` present + audible `/dev/dsp` + the 5-level playthrough + the score-entry/high-score UI + the *feel* of depth/audio are build/lint + headless-smoke + frame/WAV-dump-verified only (no console/framebuffer/audio device in dev/CI); the save engine + logic are proven via the `<frames>` smoke + 196 unit tests + an out-of-band disk round-trip.
+- **Caveat**: the whole interactive flow (menu → play → pause → game-over → high-score entry) + `/dev/fb0` present (now resolution-probing) + audible `/dev/dsp` + the *feel* of depth/audio/speed are build/lint + headless-smoke + frame/WAV-dump-verified only (no console/framebuffer/audio device in dev/CI). Headless logic is gated by 199 unit tests + the `<frames>` smoke; the save engine by an out-of-band disk round-trip. **The full console playthrough is the open pre-v1.0 gate.**
 
 ## Toolchain
 
@@ -25,15 +25,15 @@ See [`roadmap.md`](roadmap.md). Immediate sequence:
 - M3 — 2.5D depth pass (parallax background, brick extrusion, debris + collapse) (✅ 0.4.0, 2026-05-26)
 - M4 — audio pass (self-rolled square-wave SFX + OSS sink + mute; music deferred) (✅ 0.5.0, 2026-05-26)
 - M5 — high-score file (sankoch-compressed, sigil-HMAC-hashed, tamper-rejecting) (✅ 0.6.0, 2026-05-26)
-- M6 — polish (menu, pause, screen sizing, final art, accessibility) ← next
-- v1.0 — end-to-end playable, polish complete
+- M6 — polish (menu, pause, framebuffer scaling, beveled art, accessibility) (✅ 0.7.0, 2026-05-26)
+- v1.0 — end-to-end playable, polish complete ← next (after the console playtest gate; target 2026-06-13)
 
 ## Source
 
-M5 complete — scores persist. Self-rolled on bare stdlib through M4 ([ADR 0003](../adr/0003-self-rolled-primitives.md)); M5 is the first milestone to consume the shared crates (sankoch + sigil) rather than self-roll.
+M6 complete — full game shell. Self-rolled on bare stdlib through M4 ([ADR 0003](../adr/0003-self-rolled-primitives.md)); M5 added the shared crates (sankoch + sigil); M6 is presentation polish over the existing systems.
 
-Present (M1 loop + M2 levels + M3 depth + M4 audio + M5 scores — 196 assertions green):
-- `src/main.cyr` — real-time loop (tick → input → step → spawn-fx → SFX → render → fx → present), level-index tracking (advance on clear, game-complete on final clear), mute toggle, high-score load + score-entry/table screens, headless `<frames>` smoke
+Present (M1 loop + M2 levels + M3 depth + M4 audio + M5 scores + M6 polish — 199 assertions green):
+- `src/main.cyr` — title menu (play / high scores / quit, `menu_loop`/`menu_move`) → `play_game` (real-time loop: tick → input → step → spawn-fx → SFX → render → fx → present, level advance, pause, mute) → high-score entry/table; headless `<frames>` smoke
 - `src/fixed.cyr` — 16.16 fixed-point math (deterministic, integer-only)
 - `src/geom.cyr` — AABB collision, axis-aligned reflection, paddle english
 - `src/ball.cyr` — ball entity + velocity integration
@@ -42,18 +42,18 @@ Present (M1 loop + M2 levels + M3 depth + M4 audio + M5 scores — 196 assertion
 - `src/world.cyr` — `world_step()` tick + `world_serve` + `world_set_bricks` (level swap) + `world_last_hit`/`world_last_tier` (debris hook) + `world_events` (SFX hook)
 - `src/level.cyr` — 5 original ASCII layouts, plain-text parser, auto-fit geometry, per-level speed curve, `level_make_bricks` + `level_load` (advance, score/lives carry)
 - `src/framebuf.cyr` — offscreen RGB surface + clipped `fb_fill_rect` + PPM dump (self-rolled)
-- `src/render.cyr` — `render_world()` over a parallax `render_bg()`; tier-coloured bricks (`tier_rgb`) with 2px extrusion shadow
+- `src/render.cyr` — `render_world()` over a parallax `render_bg()`; tier-coloured (`tier_rgb`) beveled bricks (`draw_brick`), rounded highlighted ball (`draw_ball`), lit-edge paddle (`draw_paddle`)
 - `src/fx.cyr` — particle pool: debris shards + brick-collapse on destroy (gravity, life-shrink/dim); `fx_step`/`fx_render`
 - `src/audio.cyr` — square-wave SFX synthesis (`synth_tone`, 6 SFX) + WAV dump + mute; the tested, device-free core
 - `src/sound.cyr` — best-effort OSS `/dev/dsp` SFX sink (untested in CI; device/console only)
 - `src/save.cyr` — high-score table: insert/qualify/serialize + `hs_encode`/`hs_decode` (sankoch zlib + sigil HMAC-SHA256, tamper-rejecting) + `hs_save`/`hs_load` (`~/.cyrius-bb/scores.cyb`). Engine is buffer-pure + tested
 - `src/hud.cyr` — score + lives overlay; 3×5 digit + A-Z font (`hud_draw_letter`/`hud_draw_char`/`hud_draw_text`)
-- `src/input.cyr` — keyboard raw-tty input (a/d/arrows/space/q/m) + pure `bb_key_action` decoder + `input_read_byte` (initials entry)
+- `src/input.cyr` — raw-tty input: `bb_key_action` (a/d/arrows/space/q/m/p) + `input_poll`, `input_read_byte` (initials), `input_nav` (menu)
 - `src/tick.cyr` — ~60 fps frame pacing
-- `src/present.cyr` — best-effort `/dev/fb0` blit (untested in CI; on-console only)
+- `src/present.cyr` — best-effort `/dev/fb0` blit, probes geometry + integer-scales + centres (untested in CI; on-console only)
 - `programs/demo.cyr` — frame eyeball harness (`build/frame00..02.ppm`); `programs/audio_demo.cyr` — SFX ear harness (`build/sfx_*.wav`); `programs/scores_demo.cyr` — font + table eyeball harness
 
-All planned game modules now exist; M6 is polish (menu/pause/screens/art), not new core systems.
+All milestones M0–M6 are in; v1.0 is the polish-complete + playtested release, not new systems.
 
 ## Assets
 
@@ -69,8 +69,8 @@ No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art
 
 ## Tests
 
-- `tests/cyrius-bb.tcyr` — **196 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios + collision events, framebuf, render + tier colour/extrusion, parallax bg, fx particle pool, audio synth/mute, hud digits + letters, input decode, serve, level parser/tier-scoring/speed-curve, clear→advance progression, high-score qualify/insert/serialize/encode-decode/tamper). Deterministic + headless.
-- Playtest gate — every milestone requires manual playthrough (feel concerns). The interactive loop + `/dev/fb0` present + audible `/dev/dsp` + the 5-level playthrough + the score-entry/high-score UI + the *feel* of depth/audio (parallax rate, palette, debris spread, SFX rhythm, deferred camera shake) still need a real Linux console + audio device (build/lint + headless-smoke + frame/WAV-dump-verified only so far); headless logic is gated by the 196 assertions + the `<frames>` smoke, and the save engine by an out-of-band disk round-trip.
+- `tests/cyrius-bb.tcyr` — **199 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios + collision events, framebuf, render + beveled-art/parallax, fx particle pool, audio synth/mute, hud digits + letters, input decode, serve, level parser/tier-scoring/speed-curve, clear→advance progression, high-score qualify/insert/serialize/encode-decode/tamper). Deterministic + headless.
+- Playtest gate — the full interactive flow (menu → play → pause → game-over → high-score entry) + `/dev/fb0` present (now resolution-probing — verify scale/centre on the real console) + audible `/dev/dsp` + the *feel* of depth/audio/speed (parallax rate, palette, debris spread, SFX rhythm, deferred camera shake) need a real Linux console + audio device. Build/lint + headless-smoke + frame/WAV-dump-verified only so far; logic gated by 199 assertions + the `<frames>` smoke, save engine by an out-of-band disk round-trip. `present.cyr`'s ioctl probe is the highest-risk untested path.
 
 ## Dependencies
 
@@ -82,10 +82,9 @@ Per [ADR 0003](../adr/0003-self-rolled-primitives.md):
 
 ## Next
 
-Start here next session (0.6.0 is the current cut):
+Start here next session (0.7.0 is the current cut — all milestones M0–M6 done):
 
-1. **M6 — polish** (v0.9.0). Menu screen (title / play / high scores / quit), pause, screen-size / windowed-mode handling, final art pass (replace placeholder solid-colour rects per ADR 0002), accessibility (keyboard-only — already true; colour-blind-friendly tier palette review). The score-entry + high-score screens from M5 fold into the menu's "high scores" view; the game-over flow gets a proper screen. See [`roadmap.md`](roadmap.md) M6. NB: all core systems exist — M6 is presentation/polish, the last stop before v1.0 (target 2026-06-13).
-2. **Console + device playtest** (carries from M1–M5; the big pre-v1.0 gate) — on a real Linux console: the interactive loop + `/dev/fb0` present + audible `/dev/dsp` (likely `padsp ./cyrius-bb`; [note 001](../architecture/001-no-ffi-audio.md)) + full 5-level playthrough + score-entry/high-score UI. Tune feel: depth effects, SFX rhythm + possible voice mixer, camera shake (deferred from M3). Fix any blit/audio format issues.
-3. **Binary size** (optional) — 454 KB since M5 ([note 002](../architecture/002-save-deps-binary-size.md)); revisit only if it becomes a release blocker (would need leaner sankoch/sigil consumption upstream).
+1. **Console playtest** (THE pre-v1.0 gate — user-driven, planned for the morning after 0.7.0). On a real Linux console, run the whole flow: menu → play 5 levels → pause → lose all lives / clear all → high-score entry → table → back to menu. Verify `/dev/fb0` present scales + centres correctly at the console's resolution (the highest-risk untested code — `present.cyr` ioctl probe); audible `/dev/dsp` (likely `padsp ./cyrius-bb`; [note 001](../architecture/001-no-ffi-audio.md)). Tune *feel*: ball speed curve, paddle english, parallax rate, palette, debris spread, SFX rhythm; decide camera shake (deferred from M3) + a voice mixer if SFX overlap badly. Capture issues → fix.
+2. **v1.0 close** — once the playtest is clean: closeout pass (CLAUDE.md), final size note, CI matrix green, then cut v1.0 (target **2026-06-13**, comfortably ahead). Knife article outline at [agnosticos/docs/articles/_outlines.md](../../../../Repos/agnosticos/docs/articles/_outlines.md).
+3. **Binary size** (optional) — ~460 KB since M5 ([note 002](../architecture/002-save-deps-binary-size.md)); revisit only if it becomes a release blocker (leaner sankoch/sigil consumption is upstream work).
 4. **Repo hygiene** (optional, anytime) — untrack the vendored stdlib: `git rm -r --cached lib/` + add `lib/*.cyr` to `.gitignore` (per first-party standards; CI regenerates via `cyrius deps`).
-4. Knife article for cyrius-bb is outlined at fold-complete / v1.0 milestone — captured in [agnosticos/docs/articles/_outlines.md](../../../../Repos/agnosticos/docs/articles/_outlines.md) at the appropriate time.
