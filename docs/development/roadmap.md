@@ -39,9 +39,15 @@ Shipped: `src/level.cyr` (plain-text layout parser + 5 original ASCII layouts, b
 
 **Acceptance**: player can play through 5 levels with increasing difficulty, lose all lives, see final score. Level data loadable from a simple format (CYML or plain text lines).
 
-### M3 — 2.5D depth pass (v0.4.0)
+### M3 — 2.5D depth pass (v0.4.0) — ✅ shipped 2026-05-26
 
 *Visual treatment that makes the "2.5D" claim real.*
+
+Shipped: parallax background (`render_bg` — depth zones + far/near vertical-bar layers shifting with ball x at different rates), per-tier brick colour (`tier_rgb` — original 9-tier band, ADR 0002) with a 2px extrusion shadow (raised-block read), and brick-destruction debris + collapse particles (`src/fx.cyr` — deterministic fixed-point pool, gravity + life-shrink/dim). 147 headless assertions; DCE binary 111,688 B. Frame dumps confirm the 2.5D read. Detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.4.0]`.
+
+**Carried forward** (not blocking):
+- Camera shake on impact (the optional bullet below) deferred to the console-playtest pass — not screenshot-visible, best tuned live.
+- Feel of the depth effects (parallax rate, palette, debris spread) wants a console eye.
 
 - Parallax background — 2-3 layers of depth-offset scrolling when the ball moves
 - Brick-destruction perspective — bricks "tilt" slightly as they destruct (not a rotation animation, just a Z-depth illusion)

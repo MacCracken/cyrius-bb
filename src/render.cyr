@@ -1,6 +1,12 @@
 # render.cyr — draw a world onto an offscreen framebuffer. See ADR 0003.
 #
-# Flat rectangles only (ball, paddle, bricks) — depth treatment is M3.
+# M3 2.5D depth treatment (still no 3D engine — orthogonal 2D + depth
+# *cues*): a parallax background (depth zones + two bar layers that
+# shift at different rates with the ball), per-tier brick colour, and a
+# 2px extrusion shadow so bricks read as raised blocks. Transient
+# debris/collapse particles are a separate layer (src/fx.cyr), drawn
+# over this by the main loop.
+#
 # Converts 16.16 fixed-point world coords to integer pixels via
 # fixed_to_int. Requires (include order): fixed, ball, paddle, bricks,
 # world, framebuf — then this file.
@@ -11,9 +17,61 @@ enum RenderColor {
     BG_B = 32;
 }
 
-# Draw one frame of the world. Bricks red, paddle green, ball white.
+# Per-tier brick colour, packed r<<16 | g<<8 | b. Original era-spirit
+# band (ADR 0002 — deliberately not Atari Breakout's row colours): a
+# cool→warm gradient across tiers 1..9. Tier 0 (empty) is black.
+fn tier_rgb(t): i64 {
+    if (t == 1) { return (80 << 16) | (180 << 8) | 240; }
+    if (t == 2) { return (90 << 16) | (210 << 8) | 200; }
+    if (t == 3) { return (110 << 16) | (220 << 8) | 120; }
+    if (t == 4) { return (180 << 16) | (220 << 8) | 90; }
+    if (t == 5) { return (240 << 16) | (220 << 8) | 80; }
+    if (t == 6) { return (240 << 16) | (170 << 8) | 70; }
+    if (t == 7) { return (240 << 16) | (120 << 8) | 70; }
+    if (t == 8) { return (230 << 16) | (80 << 8) | 90; }
+    if (t == 9) { return (210 << 16) | (70 << 8) | 150; }
+    return 0;
+}
+
+fn rgb_r(c): i64 { return (c >> 16) & 255; }
+fn rgb_g(c): i64 { return (c >> 8) & 255; }
+fn rgb_b(c): i64 { return c & 255; }
+
+# One parallax bar layer: vertical bars `barw` wide repeating every
+# `period`, the whole field shifted left by `shift` px (shift >= 0).
+# Bars are full height; the caller picks bigger shifts for nearer layers.
+fn bg_bars(f, w, h, period, barw, shift, r, g, b): i64 {
+    var off = shift % period;
+    var x = 0 - off;
+    while (x < w) {
+        fb_fill_rect(f, x, 0, barw, h, r, g, b);
+        x = x + period;
+    }
+    return 0;
+}
+
+# Parallax background: three vertical depth zones (a sky-to-floor feel),
+# then a far (slow) + near (fast) bar layer offset by the ball's x. As
+# the ball moves the near bars slide further than the far bars — the
+# depth cue. Pure function of ball x, so it is deterministic + testable.
+fn render_bg(f, wd): i64 {
+    var w = fb_w(f);
+    var h = fb_h(f);
+    var third = h / 3;
+    fb_fill_rect(f, 0, 0, w, third, 14, 14, 28);
+    fb_fill_rect(f, 0, third, w, third, 18, 18, 34);
+    fb_fill_rect(f, 0, third + third, w, h - third - third, 22, 20, 40);
+    var bx = fixed_to_int(ball_x(world_ball(wd)));
+    bg_bars(f, w, h, 26, 12, asr(bx, 3), 30, 30, 52);  # far / slow
+    bg_bars(f, w, h, 44, 7, asr(bx, 2), 42, 38, 66);   # near / fast
+    return 0;
+}
+
+# Draw one frame of the world over the parallax background. Bricks are
+# tier-coloured with a 2px bottom-right extrusion shadow; paddle green;
+# ball white.
 fn render_world(f, wd): i64 {
-    fb_clear(f, BG_R, BG_G, BG_B);
+    render_bg(f, wd);
 
     var g = world_bricks(wd);
     var bw = fixed_to_int(bricks_brick_w(g));
@@ -22,11 +80,14 @@ fn render_world(f, wd): i64 {
     var i = 0;
     var bx = 0;
     var by = 0;
+    var c = 0;
     while (i < total) {
         if (brick_alive(g, i) == 1) {
             bx = fixed_to_int(brick_x(g, i));
             by = fixed_to_int(brick_y(g, i));
-            fb_fill_rect(f, bx, by, bw, bh, 200, 80, 80);
+            c = tier_rgb(brick_tier(g, i));
+            fb_fill_rect(f, bx + 2, by + 2, bw, bh, 10, 10, 18);          # extrusion shadow
+            fb_fill_rect(f, bx, by, bw, bh, rgb_r(c), rgb_g(c), rgb_b(c)); # face
         }
         i = i + 1;
     }

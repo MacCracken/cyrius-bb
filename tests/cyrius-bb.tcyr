@@ -10,6 +10,7 @@ include "src/world.cyr"
 include "src/level.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
+include "src/fx.cyr"
 include "src/hud.cyr"
 include "src/input.cyr"
 
@@ -202,14 +203,71 @@ fn test_render() {
     var g = bricks_new(2, 1, fixed_from_int(4), fixed_from_int(4), fixed_from_int(8), fixed_from_int(4), fixed_from_int(2), 0, 10);
     var wd = world_new(b, p, g, fixed_from_int(40), fixed_from_int(30), 3, fixed_from_int(4));
     render_world(f, wd);
-    assert_eq(fb_get(f, 4, 4, 0), 200, "brick pixel is red");
+    # brick face is the tier-1 colour (full RGB), not a flat red
+    assert_eq(fb_get(f, 4, 4, 0), rgb_r(tier_rgb(1)), "brick face R = tier 1");
+    assert_eq(fb_get(f, 4, 4, 1), rgb_g(tier_rgb(1)), "brick face G = tier 1");
+    assert_eq(fb_get(f, 4, 4, 2), rgb_b(tier_rgb(1)), "brick face B = tier 1");
+    # 2px extrusion shadow shows past the face's bottom-right edge
+    assert_eq(fb_get(f, 12, 8, 0), 10, "brick extrusion shadow");
     assert_eq(fb_get(f, 11, 26, 1), 200, "paddle pixel is green");
     assert_eq(fb_get(f, 20, 15, 0), 240, "ball pixel is white");
-    assert_eq(fb_get(f, 0, 15, 0), BG_R, "empty pixel is background");
-    # destroyed brick no longer drawn
+    # destroyed brick no longer paints its tier colour
     brick_destroy(g, 0);
     render_world(f, wd);
-    assert_eq(fb_get(f, 4, 4, 0), BG_R, "destroyed brick -> background");
+    assert_eq(fb_get(f, 4, 4, 0) != rgb_r(tier_rgb(1)), 1, "destroyed brick -> not tier colour");
+    return 0;
+}
+
+fn test_colors() {
+    test_group("colors");
+    assert_eq(rgb_r(tier_rgb(1)), 80, "tier 1 R");
+    assert_eq(rgb_g(tier_rgb(1)), 180, "tier 1 G");
+    assert_eq(rgb_b(tier_rgb(1)), 240, "tier 1 B");
+    assert_eq(rgb_r(tier_rgb(9)), 210, "tier 9 R");
+    assert_eq(tier_rgb(0), 0, "empty tier -> black");
+    assert_eq(tier_rgb(1) != tier_rgb(9), 1, "tiers differ in colour");
+    return 0;
+}
+
+fn test_bg() {
+    test_group("bg");
+    var f = fb_new(60, 30);
+    var b = ball_new(fixed_from_int(0), fixed_from_int(15), 0, 0, fixed_from_int(2));
+    var p = paddle_new(0, fixed_from_int(28), fixed_from_int(10), fixed_from_int(2));
+    var g = bricks_new(1, 1, fixed_from_int(4), fixed_from_int(4), fixed_from_int(8), fixed_from_int(4), 0, 0, 10);
+    var wd = world_new(b, p, g, fixed_from_int(60), fixed_from_int(30), 3, fixed_from_int(4));
+    render_bg(f, wd);
+    var v0 = fb_get(f, 2, 20, 0);
+    ball_set_x(b, fixed_from_int(80));
+    render_bg(f, wd);
+    var v1 = fb_get(f, 2, 20, 0);
+    assert_eq(v0 != v1, 1, "parallax bg shifts with ball x");
+    return 0;
+}
+
+fn test_fx() {
+    test_group("fx");
+    var fx = fx_new(8);
+    assert_eq(fx_active(fx), 0, "pool starts empty");
+    fx_debris(fx, 50, 50, 200, 100, 50);
+    assert_eq(fx_active(fx), 5, "debris burst = 5 shards");
+    fx_collapse(fx, 50, 50, 18, 200, 100, 50);
+    assert_eq(fx_active(fx), 6, "collapse adds 1");
+    fx_debris(fx, 10, 10, 1, 2, 3);
+    assert_eq(fx_active(fx), 8, "spawns capped at capacity");
+    # one known particle: integration + gravity + ageing
+    var fx2 = fx_new(4);
+    fx_spawn(fx2, 30, 40, fixed_from_int(2), 0 - fixed_from_int(3), 10, 3, 9, 9, 9);
+    assert_eq(fx_p_x(fx2, 0), fixed_from_int(30), "spawn x");
+    assert_eq(fx_p_life(fx2, 0), 10, "spawn life");
+    fx_step(fx2);
+    assert_eq(fx_p_x(fx2, 0), fixed_from_int(32), "x += vx");
+    assert_eq(fx_p_y(fx2, 0), fixed_from_int(40) - fixed_from_int(3), "y += vy");
+    assert_eq(fx_p_vy(fx2, 0), (0 - fixed_from_int(3)) + asr(FIXED_ONE, 2), "vy += gravity");
+    assert_eq(fx_p_life(fx2, 0), 9, "life decremented");
+    var k = 0;
+    while (k < 10) { fx_step(fx2); k += 1; }
+    assert_eq(fx_active(fx2), 0, "particles expire to free slots");
     return 0;
 }
 
@@ -344,6 +402,9 @@ fn main() {
     test_world_serve();
     test_level();
     test_level_progress();
+    test_colors();
+    test_bg();
+    test_fx();
     return assert_summary();
 }
 

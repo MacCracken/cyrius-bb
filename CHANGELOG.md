@@ -4,6 +4,56 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-26
+
+**M3 — the 2.5D depth pass.** The game now *reads* as 2.5D, not flat 2D
+(orthogonal 2D + depth cues — still no 3D engine, per the scope rule): a
+parallax background, per-tier brick colour with a raised-block extrusion,
+and brick-destruction debris + collapse particles. 147 headless assertions
+(was 127). DCE release binary: **111,688 bytes** (was 103,400 at 0.3.0).
+
+### Added
+- `src/fx.cyr` — transient visual-effects layer: a deterministic
+  fixed-capacity particle pool, kept separate from the sim `world` so
+  physics stays clean. `fx_debris` throws 5 colour-matched shards on a
+  brick hit; `fx_collapse` emits one brick-sized shard that shrinks to a
+  point (the destroyed brick receding in Z). Particles drift under gravity,
+  shrink + dim with remaining life, and free their slot on expiry.
+  `fx_step` / `fx_render` drive + draw the pool.
+- `render.cyr` — `render_bg`: parallax background (three vertical depth
+  zones + a far/slow and near/fast vertical-bar layer that shift with the
+  ball's x at different rates — the depth cue). `tier_rgb` (original 9-tier
+  cool→warm palette, ADR 0002 — *not* Atari's row colours) + `rgb_r/g/b`
+  extractors. Bricks now draw a 2px bottom-right extrusion shadow under a
+  tier-coloured face, so they read as raised blocks.
+- `world.cyr` — `world_last_hit` / `world_last_tier`: a render-loop hook
+  exposing the brick destroyed this tick (idx + tier, cleared to -1 each
+  step) so the loop can spawn debris at the right spot + colour. Does not
+  affect the deterministic sim.
+- `tests/` — `test_colors`, `test_bg` (parallax shifts with ball x),
+  `test_fx` (spawn / capacity cap / integration + gravity / expiry); 20 new
+  assertions, plus `test_render` updated for tier colour + extrusion.
+
+### Changed
+- `main.cyr` — both loops create an `fx` pool, spawn destruction effects
+  from `world_last_hit` (before any level swap), and step + draw the fx
+  layer over the world frame each tick.
+- `render_world` now paints `render_bg` instead of a flat clear, and
+  colours bricks by tier.
+
+### Feel
+- Camera shake on impact (the one optional M3 bullet) is **deferred to the
+  console-playtest pass** — it is not screenshot-visible (so it doesn't
+  move the M3 "tell it's 2.5D from a screenshot" bar) and is best tuned
+  live. The parallax rates, palette, and debris spread likewise want a
+  playtest eye; the effects are headless-verified (frame dumps + 147
+  assertions) but their *feel* is a console concern.
+
+**Carried forward** (not blocking; same gate as M1/M2):
+- Interactive console playthrough (loop + `/dev/fb0` present, 5-level run,
+  feel of the depth effects + speed curve, camera shake) — build/lint +
+  headless-smoke + frame-dump-verified only; no console in dev/CI.
+
 ## [0.3.0] — 2026-05-26
 
 **M2 — level progression.** The single level becomes a five-level game. A

@@ -1,0 +1,160 @@
+# fx.cyr — transient visual effects (M3): brick-destruction debris +
+# collapse. See ADR 0003. Deterministic 16.16 fixed-point, kept separate
+# from the sim `world` so physics stays clean — the main loop spawns from
+# world's last-hit hook, steps fx, then draws it over the world frame.
+#
+# A fixed-capacity particle pool. Each particle is a small square that
+# drifts under gravity and shrinks as it dies (size scales with remaining
+# life), so a big short-lived particle reads as a collapsing brick
+# receding in Z, and small ones read as debris shards. A slot is free
+# when its life is 0.
+#
+# Requires (include order): fixed.cyr, framebuf.cyr — then this file.
+
+enum Fx {
+    FX_PARTS = 0;   # ptr to the particle array
+    FX_MAX = 8;     # capacity (slots)
+    FX_GRAV = 16;   # per-tick downward accel (16.16)
+    FX_SIZE = 24;
+}
+
+enum Particle {
+    PT_X = 0;       # centre x (16.16)
+    PT_Y = 8;       # centre y (16.16)
+    PT_VX = 16;     # velocity x (16.16 / tick)
+    PT_VY = 24;     # velocity y (16.16 / tick)
+    PT_LIFE = 32;   # ticks remaining (0 = free slot)
+    PT_MAXLIFE = 40;
+    PT_SZ = 48;     # base side length (px) at full life
+    PT_R = 56;
+    PT_G = 64;
+    PT_B = 72;
+    PT_BYTES = 80;
+}
+
+fn fx_new(max): i64 {
+    var fx = alloc(FX_SIZE);
+    store64(fx + FX_MAX, max);
+    store64(fx + FX_GRAV, asr(FIXED_ONE, 2)); # 0.25 px/tick^2
+    var parts = alloc(max * PT_BYTES);
+    store64(fx + FX_PARTS, parts);
+    for (var i = 0; i < max; i += 1) {
+        store64(parts + i * PT_BYTES + PT_LIFE, 0);
+    }
+    return fx;
+}
+
+fn fx_max(fx): i64 { return load64(fx + FX_MAX); }
+fn fx_part(fx, i): i64 { return load64(fx + FX_PARTS) + i * PT_BYTES; }
+
+# Test/read accessors for a slot.
+fn fx_p_life(fx, i): i64 { return load64(fx_part(fx, i) + PT_LIFE); }
+fn fx_p_x(fx, i): i64 { return load64(fx_part(fx, i) + PT_X); }
+fn fx_p_y(fx, i): i64 { return load64(fx_part(fx, i) + PT_Y); }
+fn fx_p_vy(fx, i): i64 { return load64(fx_part(fx, i) + PT_VY); }
+
+# Live particle count (life > 0).
+fn fx_active(fx): i64 {
+    var n = 0;
+    var max = load64(fx + FX_MAX);
+    for (var i = 0; i < max; i += 1) {
+        if (load64(fx_part(fx, i) + PT_LIFE) > 0) { n += 1; }
+    }
+    return n;
+}
+
+# Spawn one particle into the first free slot. Coords are pixels (x, y),
+# velocities are 16.16/tick. Dropped silently if the pool is full.
+fn fx_spawn(fx, x, y, vx, vy, life, sz, r, g, b): i64 {
+    var max = load64(fx + FX_MAX);
+    var i = 0;
+    var slot = 0 - 1;
+    while (i < max) {
+        if (slot < 0) {
+            if (load64(fx_part(fx, i) + PT_LIFE) == 0) { slot = i; }
+        }
+        i += 1;
+    }
+    if (slot < 0) { return 0; }
+    var p = fx_part(fx, slot);
+    store64(p + PT_X, fixed_from_int(x));
+    store64(p + PT_Y, fixed_from_int(y));
+    store64(p + PT_VX, vx);
+    store64(p + PT_VY, vy);
+    store64(p + PT_LIFE, life);
+    store64(p + PT_MAXLIFE, life);
+    store64(p + PT_SZ, sz);
+    store64(p + PT_R, r);
+    store64(p + PT_G, g);
+    store64(p + PT_B, b);
+    return 0;
+}
+
+# Debris burst: 5 small shards thrown up-and-out from (x, y) in the brick
+# colour. Velocities are a fixed deterministic spread (16.16/tick).
+fn fx_debris(fx, x, y, r, g, b): i64 {
+    fx_spawn(fx, x, y, 0 - fixed_from_int(2), 0 - fixed_from_int(2), 18, 2, r, g, b);
+    fx_spawn(fx, x, y, 0 - FIXED_ONE, 0 - fixed_from_int(3), 18, 2, r, g, b);
+    fx_spawn(fx, x, y, 0, 0 - fixed_from_int(3), 18, 2, r, g, b);
+    fx_spawn(fx, x, y, FIXED_ONE, 0 - fixed_from_int(3), 18, 2, r, g, b);
+    fx_spawn(fx, x, y, fixed_from_int(2), 0 - fixed_from_int(2), 18, 2, r, g, b);
+    return 0;
+}
+
+# Collapse: one brick-sized shard that barely moves and shrinks to a
+# point over a short life — the destroyed brick receding in Z.
+fn fx_collapse(fx, x, y, size, r, g, b): i64 {
+    fx_spawn(fx, x, y, 0, asr(FIXED_ONE, 1), 8, size, r, g, b);
+    return 0;
+}
+
+# Advance every live particle one tick: integrate, apply gravity, age.
+fn fx_step(fx): i64 {
+    var max = load64(fx + FX_MAX);
+    var grav = load64(fx + FX_GRAV);
+    var i = 0;
+    var p = 0;
+    while (i < max) {
+        p = fx_part(fx, i);
+        if (load64(p + PT_LIFE) > 0) {
+            store64(p + PT_X, load64(p + PT_X) + load64(p + PT_VX));
+            store64(p + PT_Y, load64(p + PT_Y) + load64(p + PT_VY));
+            store64(p + PT_VY, load64(p + PT_VY) + grav);
+            store64(p + PT_LIFE, load64(p + PT_LIFE) - 1);
+        }
+        i += 1;
+    }
+    return 0;
+}
+
+# Draw every live particle: a centred square whose side scales with
+# remaining life (shrinks as it dies) and whose colour dims to black.
+fn fx_render(f, fx): i64 {
+    var max = load64(fx + FX_MAX);
+    var i = 0;
+    var p = 0;
+    var life = 0;
+    var maxlife = 0;
+    var side = 0;
+    var half = 0;
+    var cx = 0;
+    var cy = 0;
+    while (i < max) {
+        p = fx_part(fx, i);
+        life = load64(p + PT_LIFE);
+        if (life > 0) {
+            maxlife = load64(p + PT_MAXLIFE);
+            side = load64(p + PT_SZ) * life / maxlife;
+            if (side < 1) { side = 1; }
+            half = side / 2;
+            cx = fixed_to_int(load64(p + PT_X)) - half;
+            cy = fixed_to_int(load64(p + PT_Y)) - half;
+            fb_fill_rect(f, cx, cy, side, side,
+            load64(p + PT_R) * life / maxlife,
+            load64(p + PT_G) * life / maxlife,
+            load64(p + PT_B) * life / maxlife);
+        }
+        i += 1;
+    }
+    return 0;
+}

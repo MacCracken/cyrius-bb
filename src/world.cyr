@@ -7,9 +7,12 @@
 # Requires (include order): fixed.cyr, geom.cyr, ball.cyr, paddle.cyr,
 # bricks.cyr — then this file.
 #
-# Heap struct, 9 x i64: ball, paddle, bricks, width, height, score,
+# Heap struct, 11 x i64: ball, paddle, bricks, width, height, score,
 # lives, state, english (max horizontal velocity a full-edge paddle hit
-# imparts).
+# imparts), last_hit (brick idx destroyed this tick, -1 if none) +
+# last_tier (its tier). last_hit/last_tier are a visual-effects hook
+# (M3): the render loop reads them to spawn debris at the right spot +
+# colour. They do not affect the deterministic sim.
 
 enum WorldState {
     WS_PLAYING = 0;
@@ -28,7 +31,9 @@ enum WorldField {
     WO_LIVES = 48;
     WO_STATE = 56;
     WO_ENGLISH = 64;
-    WO_SIZE = 72;
+    WO_LAST_HIT = 72;
+    WO_LAST_TIER = 80;
+    WO_SIZE = 88;
 }
 
 fn world_new(ball, paddle, bricks, w, h, lives, english): i64 {
@@ -42,6 +47,8 @@ fn world_new(ball, paddle, bricks, w, h, lives, english): i64 {
     store64(wd + WO_LIVES, lives);
     store64(wd + WO_STATE, WS_PLAYING);
     store64(wd + WO_ENGLISH, english);
+    store64(wd + WO_LAST_HIT, 0 - 1);
+    store64(wd + WO_LAST_TIER, 0);
     return wd;
 }
 
@@ -51,6 +58,10 @@ fn world_bricks(wd): i64 { return load64(wd + WO_BRICKS); }
 fn world_score(wd): i64 { return load64(wd + WO_SCORE); }
 fn world_lives(wd): i64 { return load64(wd + WO_LIVES); }
 fn world_state(wd): i64 { return load64(wd + WO_STATE); }
+# Brick destroyed this tick (idx, or -1 if none) + its tier — a render-
+# loop hook for spawning debris. Cleared to -1 at the top of each step.
+fn world_last_hit(wd): i64 { return load64(wd + WO_LAST_HIT); }
+fn world_last_tier(wd): i64 { return load64(wd + WO_LAST_TIER); }
 
 fn world_set_state(wd, s): i64 { store64(wd + WO_STATE, s); return 0; }
 
@@ -73,6 +84,7 @@ fn world_serve(wd, x, y, vx, vy): i64 {
 # One deterministic tick. Returns the resulting world state.
 fn world_step(wd): i64 {
     if (world_state(wd) != WS_PLAYING) { return world_state(wd); }
+    store64(wd + WO_LAST_HIT, 0 - 1); # no brick destroyed yet this tick
 
     var b = world_ball(wd);
     var p = world_paddle(wd);
@@ -141,6 +153,8 @@ fn world_step(wd): i64 {
     if (hit < 0) {
         return world_state(wd);
     }
+    store64(wd + WO_LAST_HIT, hit);
+    store64(wd + WO_LAST_TIER, brick_tier(g, hit)); # capture before destroy
     store64(wd + WO_SCORE, world_score(wd) + brick_destroy(g, hit));
     ball_set_vy(b, reflect(ball_vy(b)));
     if (bricks_alive_count(g) == 0) {

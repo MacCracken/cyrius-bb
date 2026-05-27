@@ -18,6 +18,7 @@ include "src/world.cyr"
 include "src/level.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
+include "src/fx.cyr"
 include "src/hud.cyr"
 include "src/input.cyr"
 include "src/present.cyr"
@@ -30,6 +31,23 @@ enum Game {
     SERVE_X = 100;   # ball serve x (play-area centre)
     SERVE_Y = 110;   # ball serve y (just above the paddle)
     PADDLE_X = 80;   # paddle left edge, centred (AREA_W - paddle_w)/2
+    FX_CAP = 48;     # particle pool capacity (debris + collapse)
+}
+
+# Spawn destruction effects for the brick world_step destroyed this tick
+# (if any), at its centre + tier colour. Must run before any level swap.
+fn spawn_fx(fx, wd): i64 {
+    var hit = world_last_hit(wd);
+    if (hit < 0) { return 0; }
+    var g = world_bricks(wd);
+    var c = tier_rgb(world_last_tier(wd));
+    var bw = fixed_to_int(bricks_brick_w(g));
+    var bh = fixed_to_int(bricks_brick_h(g));
+    var cx = fixed_to_int(brick_x(g, hit)) + bw / 2;
+    var cy = fixed_to_int(brick_y(g, hit)) + bh / 2;
+    fx_debris(fx, cx, cy, rgb_r(c), rgb_g(c), rgb_b(c));
+    fx_collapse(fx, cx, cy, bw, rgb_r(c), rgb_g(c), rgb_b(c));
+    return 0;
 }
 
 # Build the world at level 0. Bricks come from the level loader; ball
@@ -65,22 +83,26 @@ fn advance_level(wd, level): i64 {
 fn run_headless(frames): i64 {
     var wd = build_world();
     var f = fb_new(AREA_W, AREA_H);
+    var fx = fx_new(FX_CAP);
     var level = 0;
     var i = 0;
     var st = 0;
     var running = 1;
     while (running == 1) {
         st = world_step(wd);
+        spawn_fx(fx, wd);
         if (st == WS_BALL_LOST) { serve(wd, level); }
         if (st == WS_GAME_OVER) { running = 0; }
         if (st == WS_LEVEL_CLEAR) {
             if (level + 1 >= level_count()) { running = 0; }
             else { level = advance_level(wd, level); }
         }
+        fx_step(fx);
         i = i + 1;
         if (i >= frames) { running = 0; }
     }
     render_world(f, wd);
+    fx_render(f, fx);
     hud_render(f, wd);
     fb_write_ppm(f, "build/cyrius-bb-headless.ppm");
     println("cyrius-bb headless smoke — level / score / bricks-remaining:");
@@ -99,6 +121,7 @@ fn run_headless(frames): i64 {
 fn run_interactive(): i64 {
     var wd = build_world();
     var f = fb_new(AREA_W, AREA_H);
+    var fx = fx_new(FX_CAP);
     input_init();
     fb_present_open(f);
     var dx = fixed_from_int(4);
@@ -114,6 +137,7 @@ fn run_interactive(): i64 {
         if ((act & ACT_LEFT) != 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
         if ((act & ACT_RIGHT) != 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
         st = world_step(wd);
+        spawn_fx(fx, wd);
         if (st == WS_BALL_LOST) { serve(wd, level); }
         if (st == WS_GAME_OVER) { running = 0; }
         if (st == WS_LEVEL_CLEAR) {
@@ -121,7 +145,9 @@ fn run_interactive(): i64 {
             if (level + 1 >= level_count()) { running = 0; }
             else { level = advance_level(wd, level); }
         }
+        fx_step(fx);
         render_world(f, wd);
+        fx_render(f, fx);
         hud_render(f, wd);
         fb_present_blit(f);
     }
