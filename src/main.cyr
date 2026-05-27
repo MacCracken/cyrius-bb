@@ -15,6 +15,7 @@ include "src/ball.cyr"
 include "src/paddle.cyr"
 include "src/bricks.cyr"
 include "src/world.cyr"
+include "src/level.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
 include "src/hud.cyr"
@@ -26,40 +27,65 @@ enum Game {
     AREA_W = 200;
     AREA_H = 150;
     START_LIVES = 3;
+    SERVE_X = 100;   # ball serve x (play-area centre)
+    SERVE_Y = 110;   # ball serve y (just above the paddle)
+    PADDLE_X = 80;   # paddle left edge, centred (AREA_W - paddle_w)/2
 }
 
+# Build the world at level 0. Bricks come from the level loader; ball
+# velocity comes from the level-0 speed curve.
 fn build_world(): i64 {
-    var vx = fixed_from_int(3);
-    var vy = 0 - fixed_from_int(4);
-    var b = ball_new(fixed_from_int(100), fixed_from_int(110), vx, vy, fixed_from_int(3));
-    var p = paddle_new(fixed_from_int(80), fixed_from_int(138), fixed_from_int(40), fixed_from_int(6));
-    var bw = fixed_from_int(22);
-    var bh = fixed_from_int(8);
-    var gap = fixed_from_int(4);
-    var g = bricks_new(7, 4, fixed_from_int(10), fixed_from_int(12), bw, bh, gap, gap, 10);
+    var sx = fixed_from_int(SERVE_X);
+    var sy = fixed_from_int(SERVE_Y);
+    var b = ball_new(sx, sy, level_serve_vx(0), level_serve_vy(0), fixed_from_int(3));
+    var p = paddle_new(fixed_from_int(PADDLE_X), fixed_from_int(138), fixed_from_int(40), fixed_from_int(6));
+    var g = level_make_bricks(0, AREA_W);
     return world_new(b, p, g, fixed_from_int(AREA_W), fixed_from_int(AREA_H), START_LIVES, fixed_from_int(5));
 }
 
-fn serve(wd): i64 {
-    return world_serve(wd, fixed_from_int(100), fixed_from_int(110), fixed_from_int(3), 0 - fixed_from_int(4));
+# Re-serve the ball after a loss, at the current level's speed.
+fn serve(wd, level): i64 {
+    var sx = fixed_from_int(SERVE_X);
+    var sy = fixed_from_int(SERVE_Y);
+    return world_serve(wd, sx, sy, level_serve_vx(level), level_serve_vy(level));
 }
 
-# Headless smoke: step N ticks (auto-serving on loss), dump one frame,
-# print final score + bricks remaining. No tty / framebuffer touched.
+# Advance to the next level: recentre the paddle and load its bricks +
+# speed (score / lives carry). Returns the new level index.
+fn advance_level(wd, level): i64 {
+    var next = level + 1;
+    paddle_set_x(world_paddle(wd), fixed_from_int(PADDLE_X));
+    level_load(wd, next, AREA_W, fixed_from_int(SERVE_X), fixed_from_int(SERVE_Y));
+    return next;
+}
+
+# Headless smoke: step N ticks, auto-serving on loss and advancing levels
+# on clear (ending if all levels clear or lives run out). Dumps one frame,
+# prints final level / score / bricks remaining. No tty / framebuffer.
 fn run_headless(frames): i64 {
     var wd = build_world();
     var f = fb_new(AREA_W, AREA_H);
+    var level = 0;
     var i = 0;
     var st = 0;
-    while (i < frames) {
+    var running = 1;
+    while (running == 1) {
         st = world_step(wd);
-        if (st == WS_BALL_LOST) { serve(wd); }
+        if (st == WS_BALL_LOST) { serve(wd, level); }
+        if (st == WS_GAME_OVER) { running = 0; }
+        if (st == WS_LEVEL_CLEAR) {
+            if (level + 1 >= level_count()) { running = 0; }
+            else { level = advance_level(wd, level); }
+        }
         i = i + 1;
+        if (i >= frames) { running = 0; }
     }
     render_world(f, wd);
     hud_render(f, wd);
     fb_write_ppm(f, "build/cyrius-bb-headless.ppm");
-    println("cyrius-bb headless smoke — score / bricks-remaining:");
+    println("cyrius-bb headless smoke — level / score / bricks-remaining:");
+    fmt_int_fd(1, level + 1);
+    file_write(1, " ", 1);
     fmt_int_fd(1, world_score(wd));
     file_write(1, " ", 1);
     fmt_int_fd(1, bricks_alive_count(world_bricks(wd)));
@@ -77,6 +103,7 @@ fn run_interactive(): i64 {
     fb_present_open(f);
     var dx = fixed_from_int(4);
     var maxx = fixed_from_int(AREA_W);
+    var level = 0;
     var running = 1;
     var act = 0;
     var st = 0;
@@ -87,9 +114,13 @@ fn run_interactive(): i64 {
         if ((act & ACT_LEFT) != 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
         if ((act & ACT_RIGHT) != 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
         st = world_step(wd);
-        if (st == WS_BALL_LOST) { serve(wd); }
+        if (st == WS_BALL_LOST) { serve(wd, level); }
         if (st == WS_GAME_OVER) { running = 0; }
-        if (st == WS_LEVEL_CLEAR) { running = 0; }
+        if (st == WS_LEVEL_CLEAR) {
+            # last level cleared -> game complete; otherwise load the next
+            if (level + 1 >= level_count()) { running = 0; }
+            else { level = advance_level(wd, level); }
+        }
         render_world(f, wd);
         hud_render(f, wd);
         fb_present_blit(f);

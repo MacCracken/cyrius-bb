@@ -7,6 +7,7 @@ include "src/ball.cyr"
 include "src/paddle.cyr"
 include "src/bricks.cyr"
 include "src/world.cyr"
+include "src/level.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
 include "src/hud.cyr"
@@ -263,6 +264,65 @@ fn test_world_serve() {
     return 0;
 }
 
+fn test_level() {
+    test_group("level");
+    # cell char -> tier mapping
+    assert_eq(cell_tier(49), 1, "'1' -> tier 1");
+    assert_eq(cell_tier(57), 9, "'9' -> tier 9");
+    assert_eq(cell_tier(35), 1, "'#' -> tier 1");
+    assert_eq(cell_tier(46), 0, "'.' -> empty");
+    assert_eq(cell_tier(32), 0, "space -> empty");
+    # parser on an ad-hoc layout with a gap and a short line
+    assert_eq(layout_cols(".1.\n22.\n"), 3, "cols = longest line");
+    assert_eq(layout_rows(".1.\n22.\n"), 2, "rows = line count");
+    assert_eq(layout_count(".1.\n22.\n"), 3, "count = live cells");
+    # shipped layouts: 5 levels, increasing brick count
+    assert_eq(level_count(), 5, "five levels");
+    assert_eq(layout_count(level_layout(0)), 18, "L1 brick count");
+    assert_eq(layout_count(level_layout(1)), 25, "L2 brick count");
+    assert_eq(layout_count(level_layout(2)), 34, "L3 brick count");
+    assert_eq(layout_count(level_layout(3)), 40, "L4 brick count");
+    assert_eq(layout_count(level_layout(4)), 49, "L5 brick count");
+    # built grid: total = cols*rows, alive = live cells (L4 has gaps)
+    var g1 = level_make_bricks(0, 200);
+    assert_eq(bricks_total(g1), 18, "L1 grid 9x2");
+    assert_eq(bricks_alive_count(g1), 18, "L1 all cells live");
+    assert_eq(brick_tier(g1, 0), 3, "L1 top row tier 3");
+    assert_eq(brick_tier(g1, 9), 1, "L1 bottom row tier 1");
+    assert_eq(brick_destroy(g1, 0), 30, "tier 3 brick = 30 pts");
+    assert_eq(brick_destroy(g1, 9), 10, "tier 1 brick = 10 pts");
+    var g4 = level_make_bricks(3, 200);
+    assert_eq(bricks_total(g4), 45, "L4 grid 9x5");
+    assert_eq(bricks_alive_count(g4), 40, "L4 has 5 gap cells");
+    # speed curve rises (and stays <= brick height for collision safety)
+    assert_eq(level_serve_vx(0), fixed_from_int(3), "L1 serve vx");
+    assert_eq(level_serve_vy(0), 0 - fixed_from_int(4), "L1 serve vy");
+    assert_eq(level_serve_vy(4), 0 - fixed_from_int(6), "L5 serve vy faster");
+    assert_eq(fixed_abs(level_serve_vy(4)) > fixed_abs(level_serve_vy(0)), 1, "speed climbs across levels");
+    return 0;
+}
+
+fn test_level_progress() {
+    test_group("level progress");
+    # mid-game world: 1-brick level, score in flight, 2 lives left
+    var b = ball_new(fixed_from_int(50), fixed_from_int(48), 0, fixed_from_int(2), fixed_from_int(2));
+    var p = paddle_new(0, fixed_from_int(195), fixed_from_int(20), fixed_from_int(4));
+    var g = bricks_new(1, 1, fixed_from_int(45), fixed_from_int(45), fixed_from_int(10), fixed_from_int(10), 0, 0, 100);
+    var wd = world_new(b, p, g, fixed_from_int(200), fixed_from_int(200), 2, fixed_from_int(4));
+    world_step(wd);
+    assert_eq(world_state(wd), WS_LEVEL_CLEAR, "single brick cleared");
+    assert_eq(world_score(wd), 100, "score before advancing");
+    # advance into level 1 (the 25-brick cascade)
+    level_load(wd, 1, 200, fixed_from_int(100), fixed_from_int(110));
+    assert_eq(world_state(wd), WS_PLAYING, "level_load resumes play");
+    assert_eq(world_score(wd), 100, "score carries across levels");
+    assert_eq(world_lives(wd), 2, "lives carry across levels");
+    assert_eq(bricks_alive_count(world_bricks(wd)), 25, "next level's bricks loaded");
+    assert_eq(ball_vy(world_ball(wd)), level_serve_vy(1), "ball re-served at level speed");
+    assert_eq(ball_y(world_ball(wd)), fixed_from_int(110), "ball repositioned to serve y");
+    return 0;
+}
+
 fn main() {
     alloc_init();
     test_smoke();
@@ -282,6 +342,8 @@ fn main() {
     test_hud();
     test_input();
     test_world_serve();
+    test_level();
+    test_level_progress();
     return assert_summary();
 }
 

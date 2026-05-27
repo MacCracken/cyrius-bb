@@ -4,12 +4,12 @@
 
 ## Version
 
-**0.2.0** — M1 (foundational loop) complete. Playable brick-breaker on self-rolled primitives + bare stdlib ([ADR 0003](../adr/0003-self-rolled-primitives.md)): fixed-point physics, offscreen renderer, HUD, raw-tty input, real-time loop. (Prior: 0.1.0 — scaffold + primitives, 2026-05-25.)
+**0.3.0** — M2 (level progression) complete. The single level is now a five-level game: plain-text layout parser, advance-on-clear, per-level speed curve, score + lives carried across levels, game-over on zero lives. Built on M1's self-rolled primitives + bare stdlib ([ADR 0003](../adr/0003-self-rolled-primitives.md)). (Prior: 0.2.0 — M1 foundational loop, 2026-05-25; 0.1.0 — scaffold + primitives, 2026-05-25.)
 
-- **DCE binary**: 98,648 B (x86_64, static, stripped) — down from 748,032 B at 0.1.0 after dropping the dormant mabda/sankoch/sigil deps.
-- **Tests**: 93 assertions, 0 failed. Lint + fmt clean.
+- **DCE binary**: 103,400 B (x86_64, static, stripped) — up from 98,648 B at 0.2.0 (+4,752 for the level system).
+- **Tests**: 127 assertions, 0 failed (was 93). Lint + fmt clean.
 - **Deps**: bare stdlib — zero external deps (sankoch + sigil re-wire at M5).
-- **Caveat**: interactive loop + `/dev/fb0` present are build/lint-verified only (no console/framebuffer in dev/CI); loop logic proven via the headless `<frames>` smoke + unit tests.
+- **Caveat**: interactive loop + `/dev/fb0` present + the 5-level playthrough are build/lint-verified + headless-smoke-verified only (no console/framebuffer in dev/CI); level logic proven via the headless `<frames>` smoke + 127 unit tests.
 
 ## Toolchain
 
@@ -21,24 +21,25 @@ See [`roadmap.md`](roadmap.md). Immediate sequence:
 
 - M0 — scaffold (✅ 2026-04-24)
 - M1 — ball + paddle + bricks, collision, render loop, HUD, input (✅ 0.2.0, 2026-05-25)
-- M2 — level system (5+ levels, increasing speed / brick count) ← next
-- M3 — 2.5D depth pass (parallax background, brick-destruction perspective, particle debris)
+- M2 — level system (5 levels, increasing speed / brick count) (✅ 0.3.0, 2026-05-26)
+- M3 — 2.5D depth pass (parallax background, brick-destruction perspective, particle debris) ← next
 - M4 — audio pass (shravan-synthesized effects, optional slot-loaded music)
 - M5 — high-score file (sankoch-compressed, sigil-integrity-hashed)
 - v1.0 — end-to-end playable, polish complete
 
 ## Source
 
-M1 complete — the full playable loop is in place. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
+M2 complete — single level is now a five-level game. Per [ADR 0003](../adr/0003-self-rolled-primitives.md), cyrius-bb tools its own primitives on bare stdlib (cyrius-doom pattern) rather than waiting on kiran/impetus/mabda.
 
-Present (M1 playable loop — 93 assertions green):
-- `src/main.cyr` — real-time loop (tick → input → step → render → present) + headless `<frames>` smoke
+Present (M1 loop + M2 progression — 127 assertions green):
+- `src/main.cyr` — real-time loop (tick → input → step → render → present), level-index tracking (advance on clear, game-complete on final clear) + headless `<frames>` smoke
 - `src/fixed.cyr` — 16.16 fixed-point math (deterministic, integer-only)
 - `src/geom.cyr` — AABB collision, axis-aligned reflection, paddle english
 - `src/ball.cyr` — ball entity + velocity integration
-- `src/paddle.cyr` — paddle entity + bounded horizontal motion
-- `src/bricks.cyr` — brick grid + destruction + scoring
-- `src/world.cyr` — `world_step()` tick + `world_serve` (re-serve after loss)
+- `src/paddle.cyr` — paddle entity + bounded horizontal motion + `paddle_set_x`
+- `src/bricks.cyr` — brick grid + destruction + scoring; per-cell *tier* (0=empty, 1..9), `bricks_from_cells`, `brick_tier`, `tier * value` scoring
+- `src/world.cyr` — `world_step()` tick + `world_serve` (re-serve after loss) + `world_set_bricks` (level swap)
+- `src/level.cyr` — 5 original ASCII layouts, plain-text parser, auto-fit geometry, per-level speed curve, `level_make_bricks` + `level_load` (advance, score/lives carry)
 - `src/framebuf.cyr` — offscreen RGB surface + clipped `fb_fill_rect` + PPM dump (self-rolled)
 - `src/render.cyr` — `render_world()`: bricks/paddle/ball as flat rects
 - `src/hud.cyr` — score + lives overlay (3×5 bitmap digit font)
@@ -48,7 +49,6 @@ Present (M1 playable loop — 93 assertions green):
 - `programs/demo.cyr` — eyeball harness; dumps `build/frame00..02.ppm`
 
 Planned modules:
-- `src/level.cyr` — level loading, progression, speed-curve (M2)
 - `src/audio.cyr` — sound-effect synthesis (M4)
 - `src/save.cyr` — high-score file I/O (sankoch + sigil) (M5)
 
@@ -60,14 +60,14 @@ Planned per [ADR 0002](../adr/0002-original-assets-only.md):
 - Original sprite set (paddle, ball, brick variants) — new pixel art
 - Era-spirit palette (not pixel-matching Atari Breakout's specific row colors)
 - Original square-wave / FM sound effects via shravan
-- Placeholder layouts in M1; 5+ original level layouts land in M2; final art pass in M6
+- 5 original level layouts landed in M2 (`src/level.cyr` — ASCII grids, ADR 0002); final art pass in M6
 
 No Atari-era assets. No ROM extraction. No ML-generated derivatives of Atari art.
 
 ## Tests
 
-- `tests/cyrius-bb.tcyr` — **93 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios, framebuf, render, hud, input decode, serve). Deterministic + headless.
-- Playtest gate — every milestone requires manual playthrough (feel concerns). The interactive loop + `/dev/fb0` present still need a real Linux console to actually playtest (build/lint-verified only so far); headless logic is gated by the 93 assertions + the `<frames>` smoke.
+- `tests/cyrius-bb.tcyr` — **127 assertions**, 0 failed (fixed-point, geometry, ball, paddle, bricks, `world_step` scenarios, framebuf, render, hud, input decode, serve, level parser/tier-scoring/speed-curve, clear→advance progression). Deterministic + headless.
+- Playtest gate — every milestone requires manual playthrough (feel concerns). The interactive loop + `/dev/fb0` present + the 5-level playthrough still need a real Linux console to actually playtest (build/lint + headless-smoke-verified only so far); headless logic is gated by the 127 assertions + the `<frames>` smoke.
 
 ## Dependencies
 
@@ -79,9 +79,9 @@ Per [ADR 0003](../adr/0003-self-rolled-primitives.md):
 
 ## Next
 
-Start here next session (0.2.0 is tagged):
+Start here next session (0.3.0 is the current cut):
 
-1. **M2 — level progression** (`src/level.cyr`, v0.3.0). Load level layouts from a data file, advance on clear, speed-curve + brick-count scaling across levels, lives carried across levels, 5+ original layouts (per ADR 0002). The single-level `world` already exists — M2 turns it into a sequence. See [`roadmap.md`](roadmap.md) M2 for acceptance.
-2. **v0.2.x patch** — verify the interactive loop + `/dev/fb0` present on a real Linux console (the one M1 surface not verifiable in dev/CI). Fix any blit format / resolution issues found.
+1. **M3 — 2.5D depth pass** (v0.4.0). Parallax background (2–3 depth-offset layers), brick-destruction perspective (Z-depth tilt, not rotation), particle debris on destroy, optional impact camera shake. Per-tier brick colour now has a home (`brick_tier`) — wire it into `render.cyr`. Acceptance: reads as "2.5D arcade" vs flat 2D from a screenshot. See [`roadmap.md`](roadmap.md) M3.
+2. **Console playtest** (carries from M1+M2) — verify the interactive loop + `/dev/fb0` present + the full 5-level playthrough (paddle-steer to clear each level, lose all lives, game-complete) on a real Linux console. Tune the speed-curve *feel* and add a game-over / game-complete screen (the screen is M6 polish; the loop currently just ends). Fix any blit format / resolution issues.
 3. **Repo hygiene** (optional, anytime) — untrack the vendored stdlib: `git rm -r --cached lib/` + add `lib/*.cyr` to `.gitignore` (per first-party standards; CI regenerates via `cyrius deps`).
 4. Knife article for cyrius-bb is outlined at fold-complete / v1.0 milestone — captured in [agnosticos/docs/articles/_outlines.md](../../../../Repos/agnosticos/docs/articles/_outlines.md) at the appropriate time.

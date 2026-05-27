@@ -54,6 +54,10 @@ fn world_state(wd): i64 { return load64(wd + WO_STATE); }
 
 fn world_set_state(wd, s): i64 { store64(wd + WO_STATE, s); return 0; }
 
+# Swap the brick grid (M2 level advance). Score / lives / paddle are
+# untouched, so they carry across levels; the caller re-serves the ball.
+fn world_set_bricks(wd, g): i64 { store64(wd + WO_BRICKS, g); return 0; }
+
 # Re-serve the ball (after a loss) and resume play. Lives are unchanged
 # here — world_step already decremented on the loss.
 fn world_serve(wd, x, y, vx, vy): i64 {

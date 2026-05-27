@@ -1,11 +1,16 @@
 # bricks.cyr — brick grid (16.16 fixed-point coords). See ADR 0003.
 #
-# A flat cols x rows grid of alive flags (one byte each). Brick at index
-# idx occupies a rect derived from origin + size + gap. Each brick is
-# worth `value` points (a plain integer score, not fixed-point).
+# A flat cols x rows grid of one byte per cell: 0 = empty (no brick),
+# 1..9 = a live brick of that *tier*. Brick at index idx occupies a rect
+# derived from origin + size + gap. A destroyed brick is worth
+# `tier * value` points (a plain integer score, not fixed-point) — so
+# `value` is the per-tier base. M1's full-grid `bricks_new` fills every
+# cell with tier 1, so it scores exactly `value` per brick as before;
+# M2 layouts (bricks_from_cells) carry per-cell tiers for varied scoring
+# and (M3) per-tier colour.
 #
 # Heap struct, 11 x i64: cols, rows, origin_x, origin_y, brick_w,
-# brick_h, gap_x, gap_y, value, alive_ptr, alive_count.
+# brick_h, gap_x, gap_y, value, cells_ptr, alive_count.
 
 enum BrickField {
     GR_COLS = 0;
@@ -51,7 +56,14 @@ fn bricks_value(g): i64 { return load64(g + GR_VAL); }
 fn bricks_brick_w(g): i64 { return load64(g + GR_BW); }
 fn bricks_brick_h(g): i64 { return load64(g + GR_BH); }
 
-fn brick_alive(g, idx): i64 { return load8(load64(g + GR_ALIVE) + idx); }
+# Live iff the cell's tier byte is non-zero (normalised to 0/1, since
+# tiers run 1..9 and world_step / render gate on `== 1`).
+fn brick_alive(g, idx): i64 {
+    if (load8(load64(g + GR_ALIVE) + idx) != 0) { return 1; }
+    return 0;
+}
+# Raw tier byte (0 = empty, 1..9 = brick tier) — for scoring + M3 colour.
+fn brick_tier(g, idx): i64 { return load8(load64(g + GR_ALIVE) + idx); }
 fn brick_col(g, idx): i64 { return idx % load64(g + GR_COLS); }
 fn brick_row(g, idx): i64 { return idx / load64(g + GR_COLS); }
 
@@ -65,12 +77,40 @@ fn brick_y(g, idx): i64 {
     return load64(g + GR_OY) + r * (load64(g + GR_BH) + load64(g + GR_GY));
 }
 
-# Destroy brick idx if alive. Returns points gained (value) or 0 if it
-# was already dead.
+# Destroy brick idx if alive. Returns points gained (tier * value) or 0
+# if it was already dead.
 fn brick_destroy(g, idx): i64 {
     var ap = load64(g + GR_ALIVE);
-    if (load8(ap + idx) == 0) { return 0; }
+    var tier = load8(ap + idx);
+    if (tier == 0) { return 0; }
     store8(ap + idx, 0);
     store64(g + GR_COUNT, load64(g + GR_COUNT) - 1);
-    return load64(g + GR_VAL);
+    return tier * load64(g + GR_VAL);
+}
+
+# Build a grid from a parsed cell mask: `cells` is a cols*rows byte array
+# (0 = empty, 1..9 = tier). Same geometry args as bricks_new; alive_count
+# is the number of non-empty cells. Used by the M2 level loader.
+fn bricks_from_cells(cols, rows, ox, oy, bw, bh, gx, gy, cells, value): i64 {
+    var g = alloc(GR_SIZE);
+    store64(g + GR_COLS, cols);
+    store64(g + GR_ROWS, rows);
+    store64(g + GR_OX, ox);
+    store64(g + GR_OY, oy);
+    store64(g + GR_BW, bw);
+    store64(g + GR_BH, bh);
+    store64(g + GR_GX, gx);
+    store64(g + GR_GY, gy);
+    store64(g + GR_VAL, value);
+    var n = cols * rows;
+    var alive = alloc(n);
+    var live = 0;
+    for (var i = 0; i < n; i += 1) {
+        var t = load8(cells + i);
+        store8(alive + i, t);
+        if (t != 0) { live += 1; }
+    }
+    store64(g + GR_ALIVE, alive);
+    store64(g + GR_COUNT, live);
+    return g;
 }

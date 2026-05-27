@@ -4,6 +4,56 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-26
+
+**M2 — level progression.** The single level becomes a five-level game. A
+plain-text layout parser turns ASCII grids into brick layouts; levels
+advance on clear, each faster than the last; score and lives carry across
+levels; all lives lost ends the game. 5 original layouts (ADR 0002),
+increasing brick count (18 → 25 → 34 → 40 → 49). 127 headless assertions
+(was 93). DCE release binary: **103,400 bytes** (was 98,648 at 0.2.0).
+
+### Added
+- `src/level.cyr` — level system: 5 embedded original ASCII layouts, a
+  plain-text layout parser (`layout_cols` / `layout_rows` / `layout_count`
+  / `layout_fill`, `cell_tier` char→tier map), geometry that auto-fits the
+  play width, a per-level speed curve (`level_serve_vx` / `level_serve_vy`,
+  vy −4 → −6 px/tick, capped below brick height so the ball can't tunnel),
+  `level_make_bricks` (build a grid from a layout), and `level_load`
+  (advance: swap bricks + re-serve at level speed, score/lives untouched).
+- `bricks.cyr` — `bricks_from_cells` (build a grid from a parsed tier
+  mask) + `brick_tier` accessor. The per-cell byte is now a *tier*
+  (0 = empty, 1..9 = brick of that tier); `brick_destroy` scores
+  `tier * value`, so layouts carry varied per-brick worth (and, M3, colour).
+- `world.cyr` — `world_set_bricks` (swap the grid on level advance; score /
+  lives / paddle carry). `paddle.cyr` — `paddle_set_x` (recentre on advance).
+- `tests/` — `test_level` + `test_level_progress` (parser, tier scoring,
+  grid build with gaps, speed-curve climb, and a clear→advance→play
+  transition that proves score + lives carry). 34 new assertions.
+
+### Changed
+- `main.cyr` — both loops (interactive + headless `<frames>`) now track a
+  level index: re-serve on loss at the current level's speed, advance to
+  the next level on clear, and end on the final clear (game complete) or
+  game over. `build_world` builds level 0 via the level loader instead of
+  the old hardcoded 7×4 grid.
+- `brick_alive` normalises to 0/1 (tiers run 1..9; `world_step` / `render`
+  gate on `== 1`). M1's `bricks_new` still fills tier 1, so all 93 prior
+  assertions hold unchanged.
+
+### Feel
+- Speed ramp is deliberately gentle (vy 4,4,5,5,6) to stay collision-safe;
+  the curve's *feel* across the five levels is a playtest item — see the
+  carried-forward console-playtest gate below.
+
+**Carried forward** (not blocking; same gate as M1's interactive loop):
+- Interactive 5-level playthrough on a real Linux console (steering the
+  paddle to clear each level, losing all lives, game-complete) is
+  build/lint-verified + headless-smoke-verified only — no console in
+  dev/CI. The level logic is gated by the 127 assertions + the `<frames>`
+  smoke; per-level *feel* and a game-over / game-complete presentation
+  screen (the screen itself is M6 polish) await a console pass.
+
 ## [0.2.0] — 2026-05-25
 
 **M1 — the foundational loop.** A playable brick-breaker built entirely on self-rolled primitives + bare Cyrius stdlib ([ADR 0003](docs/adr/0003-self-rolled-primitives.md)): deterministic fixed-point physics, an offscreen renderer, a HUD, raw-tty input, and a real-time loop. The whole simulation is unit-tested headless (93 assertions); interactive play + `/dev/fb0` present run on a Linux console. DCE release binary: **98,648 bytes** (was 748,032 at 0.1.0).

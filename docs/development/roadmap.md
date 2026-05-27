@@ -22,9 +22,14 @@ The "it's a game" milestone. Self-rolled on bare stdlib ([ADR 0003](../adr/0003-
 - `/dev/fb0` present + interactive loop verified on a real Linux console — build/lint-verified only so far (no console/framebuffer in dev/CI).
 - Placeholder assets stay solid-color rectangles until the art pass (M6).
 
-### M2 — Level progression (v0.3.0)
+### M2 — Level progression (v0.3.0) — ✅ shipped 2026-05-26
 
 *Turn the single level into a game with depth.*
+
+Shipped: `src/level.cyr` (plain-text layout parser + 5 original ASCII layouts, brick counts 18 → 25 → 34 → 40 → 49), advance-on-clear, per-level speed curve (vy −4 → −6 px/tick), score + lives carried across levels, game-over on zero lives. Per-cell brick *tier* (0–9) scores `tier × value` and seeds M3's per-tier colour. 127 headless assertions; DCE binary 103,400 B. Detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.3.0]`.
+
+**Carried forward** (not blocking; same gate as M1's loop):
+- Interactive 5-level playthrough + game-over / game-complete presentation on a real Linux console — headless-smoke + unit-test-verified only so far. A dedicated game-over / win screen is M6 polish; the loop currently just ends on those states.
 
 - `src/level.cyr` — level loader from data file, progression on clear, speed-curve across levels
 - 5+ original level layouts (not Atari-identical; see ADR 0002)

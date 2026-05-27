@@ -20,6 +20,8 @@ fn paddle_new(x, y, w, h): i64 {
     return p;
 }
 
+fn paddle_set_x(p, x): i64 { store64(p + PO_X, x); return 0; }
+
 fn paddle_x(p): i64 { return load64(p + PO_X); }
 fn paddle_y(p): i64 { return load64(p + PO_Y); }
 fn paddle_w(p): i64 { return load64(p + PO_W); }

@@ -1,0 +1,150 @@
+# level.cyr — level definitions, layout parser, speed curve, progression.
+# See ADR 0002 (original layouts only) + ADR 0003 (self-rolled).
+#
+# A level is a plain-text layout (rows of cells) + a per-level ball speed.
+# Cells: '.' / ' ' = empty, '1'..'9' = a brick of that *tier* (points =
+# tier * LV_BASE_VALUE, and — M3 — colour), '#' = tier 1. Layouts are
+# embedded as null-terminated string constants; the parser is the
+# "loader" (the same grid-of-lines format a data file would carry).
+# Geometry auto-fits the play width, so a layout just draws its shape.
+#
+# Difficulty climbs two ways (per roadmap M2): denser layouts (more
+# bricks) and a rising ball speed. Lives + score live in `world` and are
+# untouched by level_load, so they carry across levels.
+#
+# Requires (include order): fixed.cyr, bricks.cyr, world.cyr — then this.
+
+enum Level {
+    LEVEL_COUNT = 5;
+    LV_MARGIN = 8;      # px play-area margin each side
+    LV_TOP = 12;        # px from top to first brick row
+    LV_BH = 8;          # brick height (px)
+    LV_GAP = 2;         # gap between bricks (px)
+    LV_BASE_VALUE = 10; # points per tier (tier-1 brick = 10, tier-9 = 90)
+}
+
+fn level_count(): i64 { return LEVEL_COUNT; }
+
+# Layout for level idx (0-based). Original shapes (ADR 0002), increasing
+# brick count: 18, 25, 34, 40, 49. Out-of-range idx falls back to L1.
+fn level_layout(idx): i64 {
+    if (idx == 0) { return "333333333\n111111111\n"; }
+    if (idx == 1) { return "22222.....\n.22222....\n..22222...\n...22222..\n....22222.\n"; }
+    if (idx == 2) { return "999999999\n888888888\n.7777777.\n666666666\n"; }
+    if (idx == 3) { return "999999999\n988888889\n98.....89\n988888889\n999999999\n"; }
+    if (idx == 4) { return "999999999\n888888888\n777777777\n666666666\n555555555\n.4.4.4.4.\n"; }
+    return "333333333\n111111111\n";
+}
+
+# Char -> tier: '1'..'9' -> 1..9, '#' -> 1, anything else -> 0 (empty).
+fn cell_tier(c): i64 {
+    if (c >= 49 && c <= 57) { return c - 48; }
+    if (c == 35) { return 1; }
+    return 0;
+}
+
+# Columns = longest line; rows = line count. Newline is byte 10.
+fn layout_cols(s): i64 {
+    var i = 0;
+    var col = 0;
+    var max = 0;
+    var c = load8(s);
+    while (c != 0) {
+        if (c == 10) {
+            col = 0;
+        } else {
+            col += 1;
+            if (col > max) { max = col; }
+        }
+        i += 1;
+        c = load8(s + i);
+    }
+    return max;
+}
+
+fn layout_rows(s): i64 {
+    var i = 0;
+    var rows = 0;
+    var col = 0;
+    var c = load8(s);
+    while (c != 0) {
+        if (c == 10) {
+            rows += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        i += 1;
+        c = load8(s + i);
+    }
+    if (col > 0) { rows += 1; } # trailing line with no closing newline
+    return rows;
+}
+
+# Number of live cells (tier != 0) — the level's brick count.
+fn layout_count(s): i64 {
+    var i = 0;
+    var n = 0;
+    var c = load8(s);
+    while (c != 0) {
+        if (cell_tier(c) != 0) { n += 1; }
+        i += 1;
+        c = load8(s + i);
+    }
+    return n;
+}
+
+# Fill a pre-zeroed cols*rows byte array with each cell's tier. Lines
+# shorter than `cols` leave their trailing cells at 0 (empty).
+fn layout_fill(s, cells, cols): i64 {
+    var i = 0;
+    var col = 0;
+    var row = 0;
+    var c = load8(s);
+    while (c != 0) {
+        if (c == 10) {
+            row += 1;
+            col = 0;
+        } else {
+            store8(cells + row * cols + col, cell_tier(c));
+            col += 1;
+        }
+        i += 1;
+        c = load8(s + i);
+    }
+    return 0;
+}
+
+# Build the brick grid for level idx, geometry auto-fit to area_w (px).
+fn level_make_bricks(idx, area_w): i64 {
+    var s = level_layout(idx);
+    var cols = layout_cols(s);
+    var rows = layout_rows(s);
+    var n = cols * rows;
+    var cells = alloc(n);
+    for (var i = 0; i < n; i += 1) { store8(cells + i, 0); }
+    layout_fill(s, cells, cols);
+    var avail = area_w - LV_MARGIN - LV_MARGIN - (cols - 1) * LV_GAP;
+    var bw_px = avail / cols;
+    var ox = fixed_from_int(LV_MARGIN);
+    var oy = fixed_from_int(LV_TOP);
+    var bw = fixed_from_int(bw_px);
+    var bh = fixed_from_int(LV_BH);
+    var gx = fixed_from_int(LV_GAP);
+    var gy = fixed_from_int(LV_GAP);
+    return bricks_from_cells(cols, rows, ox, oy, bw, bh, gx, gy, cells, LV_BASE_VALUE);
+}
+
+# Speed curve — serve velocity per level. Magnitude rises with idx; the
+# ramp stays gentle (vy peaks at 6 px/tick < brick height 8) so the ball
+# can't tunnel a brick. vx: 3,3,3,3,4  vy: -4,-4,-5,-5,-6.
+fn level_serve_vx(idx): i64 { return fixed_from_int(3 + asr(idx, 2)); }
+fn level_serve_vy(idx): i64 { return 0 - fixed_from_int(4 + asr(idx, 1)); }
+
+# Advance to level idx: swap in its bricks and re-serve the ball at this
+# level's speed. Score / lives / paddle are left untouched (they carry).
+fn level_load(wd, idx, area_w, serve_x, serve_y): i64 {
+    world_set_bricks(wd, level_make_bricks(idx, area_w));
+    world_serve(wd, serve_x, serve_y, level_serve_vx(idx), level_serve_vy(idx));
+    return 0;
+}
