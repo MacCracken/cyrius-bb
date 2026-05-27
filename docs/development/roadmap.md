@@ -71,14 +71,20 @@ Shipped: parallax background (`render_bg` — depth zones + far/near vertical-ba
 - **Slot-loaded music deferred** — `.ogg` needs an OGG decoder, infeasible without FFI/a decoder crate. If revisited it will be WAV. The SFX-focused acceptance does not depend on music.
 - **Audible playback** needs an OSS device (`padsp` shim on modern desktops) — build-verified only, like `/dev/fb0`. WAV dumps are the always-works verification path. SFX *feel* + a possible voice mixer want a console ear.
 
-### M5 — High-score persistence (v0.6.0)
+### M5 — High-score persistence (v0.6.0) — ✅ shipped 2026-05-26
 
-- `src/save.cyr` — high-score table saved to `~/.cyrius-bb/scores.cyb` (custom extension, sankoch-compressed, sigil-integrity-hashed)
-- Top-10 persistent scores with player initials
-- Score entry UI on game-over if the score qualifies
-- Tamper-detection — sigil hash mismatch means corrupted save; refuse to load, don't crash
+- `src/save.cyr` — high-score table at `~/.cyrius-bb/scores.cyb` (`CYBB` container, sankoch zlib-compressed, sigil HMAC-SHA256-hashed over the plaintext)
+- Top-10 persistent scores with player initials (A-Z font added to `hud.cyr`)
+- Score-entry screen on a qualifying natural finish + a high-score table view (console-side in `main.cyr`)
+- Tamper-detection — HMAC mismatch (-2) or bad magic/size (-1) → refuse, leave the in-memory table untouched, don't crash
 
-**Acceptance**: high scores persist across sessions; editing the file by hand invalidates it; a legit clear path produces a score that matches a hand-calculated expectation.
+First milestone to USE the shared crates (ADR 0003): sankoch + sigil wired from the 6.0.1 toolchain snapshot via `[deps].stdlib`. 196 headless assertions + an out-of-band disk round-trip; DCE binary **454,352 B** (~4x — the crate cost, [note 002](../architecture/002-save-deps-binary-size.md)). Detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.6.0]`.
+
+**Acceptance**: high scores persist across sessions; editing the file by hand invalidates it; a legit clear path produces a score that matches a hand-calculated expectation. ✅ All verified (in-memory tests + disk round-trip; scores are `tier × 10` summed, hand-calculable).
+
+**Carried forward** (not blocking):
+- The score-entry + high-score screens are first-pass console UI (untested in CI, like the loop); their layout/feel + the game-over→menu flow land in M6.
+- Binary size (~4x) accepted as the honest cost of real compression + crypto.
 
 ### M6 — Polish (v0.9.0)
 

@@ -1,0 +1,64 @@
+# scores_demo.cyr — render the A-Z + 0-9 font and a sample high-score
+# table to PPMs, to eyeball the glyphs + layout without a console.
+#
+# Build: cyrius build programs/scores_demo.cyr build/scores_demo
+# Run:   ./build/scores_demo   (writes build/font_demo.ppm, build/scores_demo.ppm)
+
+include "src/fixed.cyr"
+include "src/geom.cyr"
+include "src/ball.cyr"
+include "src/paddle.cyr"
+include "src/bricks.cyr"
+include "src/world.cyr"
+include "src/save.cyr"
+include "src/framebuf.cyr"
+include "src/hud.cyr"
+
+# Same layout as main.cyr's render_scores (duplicated here for the eyeball
+# harness — render_scores itself is console-side in main.cyr).
+fn draw_table(f, t): i64 {
+    fb_clear(f, 10, 10, 26);
+    hud_draw_text(f, 52, 8, "HIGH SCORES", 2, 240, 220, 80);
+    var n = hs_count(t);
+    var i = 0;
+    var y = 30;
+    while (i < n) {
+        hud_draw_number(f, 16, y, i + 1, 1, 150, 150, 175);
+        hud_draw_char(f, 44, y, hs_initial(t, i, 0), 2, 200, 220, 255);
+        hud_draw_char(f, 53, y, hs_initial(t, i, 1), 2, 200, 220, 255);
+        hud_draw_char(f, 62, y, hs_initial(t, i, 2), 2, 200, 220, 255);
+        hud_draw_number(f, 92, y, hs_score(t, i), 2, 240, 240, 240);
+        y = y + 11;
+        i = i + 1;
+    }
+    return 0;
+}
+
+fn main() {
+    alloc_init();
+    fl_init();
+    hud_init();
+
+    var f = fb_new(200, 90);
+    fb_clear(f, 12, 12, 28);
+    hud_draw_text(f, 4, 6, "ABCDEFGHIJKLM", 3, 200, 220, 255);
+    hud_draw_text(f, 4, 30, "NOPQRSTUVWXYZ", 3, 200, 220, 255);
+    hud_draw_text(f, 4, 60, "0123456789", 3, 240, 220, 80);
+    fb_write_ppm(f, "build/font_demo.ppm");
+
+    # sample table
+    var t = hs_new();
+    hs_insert(t, 65, 67, 69, 4820);   # ACE
+    hs_insert(t, 66, 79, 66, 3110);   # BOB
+    hs_insert(t, 90, 90, 90, 1500);   # ZZZ
+    hs_insert(t, 82, 77, 67, 990);    # RMC
+    var g = fb_new(200, 150);
+    draw_table(g, t);
+    fb_write_ppm(g, "build/scores_demo.ppm");
+
+    println("scores_demo: wrote build/font_demo.ppm + build/scores_demo.ppm");
+    return 0;
+}
+
+var r = main();
+syscall(60, r);

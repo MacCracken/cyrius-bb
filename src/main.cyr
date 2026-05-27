@@ -16,6 +16,7 @@ include "src/paddle.cyr"
 include "src/bricks.cyr"
 include "src/world.cyr"
 include "src/level.cyr"
+include "src/save.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
 include "src/fx.cyr"
@@ -58,6 +59,92 @@ fn play_event_sfx(wd): i64 {
     if ((ev & EV_WALL) != 0) { sound_play(SFX_WALL); }
     if ((ev & EV_PADDLE) != 0) { sound_play(SFX_PADDLE); }
     if ((ev & EV_BRICK) != 0) { sound_play(SFX_BRICK); }
+    return 0;
+}
+
+# Console-only (not CI-tested, like the game loop): block until a key,
+# return its byte.
+fn wait_key(): i64 {
+    var ch = 0 - 1;
+    while (ch < 0) {
+        frame_sleep();
+        ch = input_read_byte();
+    }
+    return ch;
+}
+
+# Console-only: prompt for 3 initials (typed A-Z, backspace edits, Enter
+# confirms). Returns them packed c0 | c1<<8 | c2<<16; defaults to "AAA".
+fn enter_initials(f, score): i64 {
+    var ini[3];
+    store8(&ini, 65);
+    store8(&ini + 1, 65);
+    store8(&ini + 2, 65);
+    var pos = 0;
+    var done = 0;
+    var ch = 0;
+    var up = 0;
+    var k = 0;
+    while (done == 0) {
+        frame_sleep();
+        fb_clear(f, 12, 10, 28);
+        hud_draw_text(f, 40, 18, "NEW HIGH SCORE", 2, 240, 220, 80);
+        hud_draw_number(f, 86, 44, score, 2, 240, 240, 240);
+        k = 0;
+        while (k < 3) {
+            hud_draw_char(f, 74 + k * 22, 76, load8(&ini + k), 4, 200, 220, 255);
+            if (k == pos) { fb_fill_rect(f, 74 + k * 22, 100, 12, 2, 240, 240, 80); }
+            k = k + 1;
+        }
+        hud_draw_text(f, 40, 122, "ENTER TO SAVE", 1, 150, 150, 175);
+        fb_present_blit(f);
+        ch = input_read_byte();
+        if (ch >= 0) {
+            if (ch == 10) { done = 1; }
+            if (ch == 13) { done = 1; }
+            if (ch == 127) { if (pos > 0) { pos = pos - 1; } }
+            if (ch == 8) { if (pos > 0) { pos = pos - 1; } }
+            up = ch;
+            if (up >= 97) { if (up <= 122) { up = up - 32; } }
+            if (up >= 65) { if (up <= 90) { if (pos < 3) {
+                        store8(&ini + pos, up);
+                        pos = pos + 1;
+                    } } }
+        }
+    }
+    return load8(&ini) | (load8(&ini + 1) << 8) | (load8(&ini + 2) << 16);
+}
+
+# Console-only: draw the high-score table (rank, initials, score).
+fn render_scores(f, t): i64 {
+    fb_clear(f, 10, 10, 26);
+    hud_draw_text(f, 52, 8, "HIGH SCORES", 2, 240, 220, 80);
+    var n = hs_count(t);
+    var i = 0;
+    var y = 30;
+    while (i < n) {
+        hud_draw_number(f, 16, y, i + 1, 1, 150, 150, 175);
+        hud_draw_char(f, 44, y, hs_initial(t, i, 0), 2, 200, 220, 255);
+        hud_draw_char(f, 53, y, hs_initial(t, i, 1), 2, 200, 220, 255);
+        hud_draw_char(f, 62, y, hs_initial(t, i, 2), 2, 200, 220, 255);
+        hud_draw_number(f, 92, y, hs_score(t, i), 2, 240, 240, 240);
+        y = y + 11;
+        i = i + 1;
+    }
+    return 0;
+}
+
+# Console-only: after a finished game, if the score qualifies, take the
+# player's initials and persist; then show the table until a key press.
+fn post_game(f, scores, score): i64 {
+    if (hs_qualifies(scores, score) == 1) {
+        var packed = enter_initials(f, score);
+        hs_insert(scores, packed & 255, (packed >> 8) & 255, (packed >> 16) & 255, score);
+        hs_save(scores);
+    }
+    render_scores(f, scores);
+    fb_present_blit(f);
+    wait_key();
     return 0;
 }
 
@@ -133,6 +220,8 @@ fn run_interactive(): i64 {
     var wd = build_world();
     var f = fb_new(AREA_W, AREA_H);
     var fx = fx_new(FX_CAP);
+    var scores = hs_new();
+    hs_load(scores);
     input_init();
     fb_present_open(f);
     sound_open();
@@ -140,6 +229,7 @@ fn run_interactive(): i64 {
     var maxx = fixed_from_int(AREA_W);
     var level = 0;
     var running = 1;
+    var completed = 0; # finished naturally (game over / all levels) vs quit
     var act = 0;
     var st = 0;
     while (running == 1) {
@@ -153,11 +243,11 @@ fn run_interactive(): i64 {
         spawn_fx(fx, wd);
         play_event_sfx(wd);
         if (st == WS_BALL_LOST) { sound_play(SFX_LOST); serve(wd, level); }
-        if (st == WS_GAME_OVER) { sound_play(SFX_OVER); running = 0; }
+        if (st == WS_GAME_OVER) { sound_play(SFX_OVER); completed = 1; running = 0; }
         if (st == WS_LEVEL_CLEAR) {
             # last level cleared -> game complete; otherwise load the next
             sound_play(SFX_FANFARE);
-            if (level + 1 >= level_count()) { running = 0; }
+            if (level + 1 >= level_count()) { completed = 1; running = 0; }
             else { level = advance_level(wd, level); }
         }
         fx_step(fx);
@@ -166,6 +256,8 @@ fn run_interactive(): i64 {
         hud_render(f, wd);
         fb_present_blit(f);
     }
+    # natural finish (not a quit) may earn a high-score entry
+    if (completed == 1) { post_game(f, scores, world_score(wd)); }
     fb_present_close();
     sound_close();
     input_shutdown();
@@ -174,6 +266,7 @@ fn run_interactive(): i64 {
 
 fn main(): i64 {
     alloc_init();
+    fl_init();
     args_init();
     hud_init();
     audio_init();

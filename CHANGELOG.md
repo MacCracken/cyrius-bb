@@ -4,6 +4,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-26
+
+**M5 — high-score persistence.** A top-10 table with 3-letter initials,
+saved to `~/.cyrius-bb/scores.cyb`: sankoch-compressed + sigil-HMAC-SHA256
+integrity-hashed, tamper-rejecting. This is the first milestone to consume
+the shared crates rather than self-roll (ADR 0003 — "use them, don't
+self-roll zip/crypto"). 196 headless assertions (was 190). DCE release
+binary: **454,352 bytes** — up from 117,184 at 0.5.0; the ~4x jump is the
+cost of compiling in sankoch + sigil, which DCE can't trim (see
+[architecture note 002](docs/architecture/002-save-deps-binary-size.md)).
+
+### Added
+- `src/save.cyr` — the persistence engine (pure + buffer-based, so it is
+  headless-tested): top-10 table (`hs_insert` keeps it sorted descending,
+  drops the overflow entry; `hs_qualifies`), a versioned serializer, and
+  `hs_encode`/`hs_decode` — payload → sankoch zlib + a sigil HMAC-SHA256
+  over the plaintext, in a `CYBB`-magic container. `hs_decode` rejects a
+  bad magic / size (-1) or HMAC mismatch (-2) and leaves the table
+  untouched, so a hand-edited file is refused, not trusted. `hs_save` /
+  `hs_load` are the thin `~/.cyrius-bb/scores.cyb` file wrappers (best-
+  effort `mkdir`, `$HOME` via `getenv`; first run with no file is rc=1,
+  not an error).
+- `hud.cyr` — an A-Z 3x5 font (`hud_draw_letter` / `hud_draw_char`) + a
+  `hud_draw_text` string drawer, so initials + names render. `glyph()`
+  helper factors the bit-packing.
+- `input.cyr` — `input_read_byte` (raw non-blocking byte) for initials
+  entry.
+- `main.cyr` — high-score table loaded at start-up; on a natural finish
+  (game over / all levels cleared, not a quit) a qualifying score opens an
+  initials-entry screen, inserts + saves, then shows the table until a
+  keypress. Console-only (not CI-tested), like the rest of the loop.
+- `programs/scores_demo.cyr` — dumps the font + a sample table to PPM (the
+  eyeball harness, like `demo`/`audio_demo`); used to verify the glyphs.
+- `docs/architecture/002-save-deps-binary-size.md`.
+- `tests/` — `test_scores` (qualify/insert ordering + overflow cap,
+  serialize round-trip, zlib+HMAC encode/decode round-trip, tamper → -2,
+  bad-magic → -1) + letter-font assertions. 23 new assertions.
+
+### Changed
+- `cyrius.cyml` — wired the M5 deps: sankoch + sigil (+ their transitive
+  freelist / bigint / ct / keccak) added to `[deps].stdlib`. They ship in
+  the 6.0.1 toolchain snapshot, so they resolve from the pinned lib with
+  no git fetch; the commented git-source blocks are kept for reference.
+  `main()` / tests call `fl_init()` (sigil's allocator) at start-up.
+
+### Feel
+- The score-entry + high-score screens are first-pass console UI; their
+  layout/feel and a proper game-over/menu flow are playtest + M6 territory.
+
+**Carried forward** (not blocking):
+- Binary size: the 4x jump is accepted as the honest cost of real
+  compression + crypto; leaner consumption of the bundles is an upstream
+  DCE-friendliness concern, revisited only if size becomes a blocker.
+- Carries from M1–M4: full console playthrough + the entry/high-score UI
+  on a real console, depth/audio feel, audible `/dev/dsp`, camera shake,
+  and a polished game-over/menu (M6).
+
 ## [0.5.0] — 2026-05-26
 
 **M4 — the audio pass.** Era-spirit square-wave SFX, self-rolled on bare

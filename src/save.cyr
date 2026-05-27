@@ -1,0 +1,229 @@
+# save.cyr — persistent high-score table. See ADR 0003 + roadmap M5.
+#
+# Top-10 scores with 3-letter initials, persisted to
+# ~/.cyrius-bb/scores.cyb. Unlike the renderer / audio (self-rolled),
+# scoring USES the shared crates per ADR 0003 — sankoch for compression,
+# sigil for the integrity hash; we don't self-roll zip/crypto. Both are
+# bundled in the 6.0.1 toolchain snapshot (added to cyrius.cyml [deps]
+# stdlib), so consuming them needs no network.
+#
+# File layout (.cyb):
+#   [0]   "CYBB"                 magic (4 bytes)
+#   [4]   HMAC-SHA256            of the *plaintext* payload (32 bytes)
+#   [36]  plain_len              u32 LE (4 bytes)
+#   [40]  zlib(payload)          sankoch FORMAT_ZLIB
+# Tamper detection: any hand-edit changes the compressed bytes (-> the
+# decompressed payload, or its HMAC) — and the HMAC can't be recomputed
+# without the embedded key — so load refuses a mismatch instead of
+# trusting it. The decode never mutates the caller's table until the
+# HMAC verifies, so a bad file leaves the in-memory table untouched.
+#
+# The table ops + encode/decode are pure (buffer-only), so they are
+# unit-tested headless; file I/O is the thin save/load wrapper.
+# Requires sigil (sha256/hmac), sankoch (compress), freelist (fl_init),
+# and stdlib io/string — all auto-included via cyrius.cyml.
+
+enum Score {
+    HS_MAX = 10;     # top-10
+    SC_INIT = 0;     # 3 initial bytes at +0,+1,+2
+    SC_SCORE = 8;    # i64 score
+    SC_BYTES = 16;   # per-entry stride
+    TB_COUNT = 0;    # entries in use (0..HS_MAX)
+    TB_ENTRIES = 8;  # inline entry array
+    TB_BYTES = 168;  # 8 + HS_MAX * SC_BYTES
+}
+
+fn save_key(): i64 { return "cyrius-bb-scores-v1"; }
+
+fn hs_new(): i64 {
+    var t = alloc(TB_BYTES);
+    store64(t + TB_COUNT, 0);
+    return t;
+}
+
+fn hs_count(t): i64 { return load64(t + TB_COUNT); }
+fn hs_entry(t, i): i64 { return t + TB_ENTRIES + i * SC_BYTES; }
+fn hs_score(t, i): i64 { return load64(hs_entry(t, i) + SC_SCORE); }
+fn hs_initial(t, i, k): i64 { return load8(hs_entry(t, i) + k); }
+
+# Would `score` make the table? Non-positive never qualifies.
+fn hs_qualifies(t, score): i64 {
+    if (score <= 0) { return 0; }
+    if (hs_count(t) < HS_MAX) { return 1; }
+    if (score > hs_score(t, HS_MAX - 1)) { return 1; }
+    return 0;
+}
+
+# Insert an entry keeping the table sorted descending; drop the overflow
+# entry if full. Returns the 0-based rank, or -1 if it didn't qualify.
+fn hs_insert(t, c0, c1, c2, score): i64 {
+    if (hs_qualifies(t, score) == 0) { return 0 - 1; }
+    var cnt = hs_count(t);
+    var rank = 0;
+    while (rank < cnt) {
+        if (hs_score(t, rank) >= score) { rank += 1; } else { break; }
+    }
+    var last = cnt;
+    if (last >= HS_MAX) { last = HS_MAX - 1; } # drop entry HS_MAX-1
+    var i = last;
+    while (i > rank) {
+        memcpy(hs_entry(t, i), hs_entry(t, i - 1), SC_BYTES);
+        i -= 1;
+    }
+    var e = hs_entry(t, rank);
+    store8(e + 0, c0);
+    store8(e + 1, c1);
+    store8(e + 2, c2);
+    store64(e + SC_SCORE, score);
+    if (cnt < HS_MAX) { store64(t + TB_COUNT, cnt + 1); }
+    return rank;
+}
+
+# Serialize to a plaintext buffer: [ver=1][count][count x (3 init + 8 LE
+# score)]. Returns the byte length (<= 2 + HS_MAX*11 = 112).
+fn hs_serialize(t, buf): i64 {
+    store8(buf + 0, 1);
+    var cnt = hs_count(t);
+    store8(buf + 1, cnt);
+    var off = 2;
+    var i = 0;
+    var e = 0;
+    var s = 0;
+    var k = 0;
+    while (i < cnt) {
+        e = hs_entry(t, i);
+        store8(buf + off + 0, load8(e + 0));
+        store8(buf + off + 1, load8(e + 1));
+        store8(buf + off + 2, load8(e + 2));
+        s = load64(e + SC_SCORE);
+        k = 0;
+        while (k < 8) {
+            store8(buf + off + 3 + k, (s >> (k * 8)) & 255);
+            k += 1;
+        }
+        off += 11;
+        i += 1;
+    }
+    return off;
+}
+
+# Parse a plaintext buffer into the table. Returns 0, or -1 if malformed.
+fn hs_deserialize(t, buf, len): i64 {
+    if (len < 2) { return 0 - 1; }
+    if (load8(buf + 0) != 1) { return 0 - 1; }
+    var cnt = load8(buf + 1);
+    if (cnt > HS_MAX) { return 0 - 1; }
+    if (len < 2 + cnt * 11) { return 0 - 1; }
+    var off = 2;
+    var i = 0;
+    var e = 0;
+    var s = 0;
+    var k = 0;
+    while (i < cnt) {
+        e = hs_entry(t, i);
+        store8(e + 0, load8(buf + off + 0));
+        store8(e + 1, load8(buf + off + 1));
+        store8(e + 2, load8(buf + off + 2));
+        s = 0;
+        k = 0;
+        while (k < 8) {
+            s = s | ((load8(buf + off + 3 + k) & 255) << (k * 8));
+            k += 1;
+        }
+        store64(e + SC_SCORE, s);
+        off += 11;
+        i += 1;
+    }
+    store64(t + TB_COUNT, cnt);
+    return 0;
+}
+
+# Encode the table to its on-disk bytes in `out` (cap bytes). Returns the
+# total length, or a negative sankoch error.
+fn hs_encode(t, out, cap): i64 {
+    var plain[256];
+    var plen = hs_serialize(t, &plain);
+    var mac[32];
+    hmac_sha256(save_key(), strlen(save_key()), &plain, plen, &mac);
+    var clen = compress(FORMAT_ZLIB, &plain, plen, out + 40, cap - 40);
+    if (clen < 0) { return clen; }
+    store8(out + 0, 67); # 'C'
+    store8(out + 1, 89); # 'Y'
+    store8(out + 2, 66); # 'B'
+    store8(out + 3, 66); # 'B'
+    memcpy(out + 4, &mac, 32);
+    store8(out + 36, plen & 255);
+    store8(out + 37, (plen >> 8) & 255);
+    store8(out + 38, (plen >> 16) & 255);
+    store8(out + 39, (plen >> 24) & 255);
+    return 40 + clen;
+}
+
+# Decode on-disk bytes into the table. Returns 0 ok; -1 malformed /
+# corrupt; -2 HMAC mismatch (tampered). The table is left untouched
+# unless the HMAC verifies.
+fn hs_decode(t, buf, len): i64 {
+    if (len < 40) { return 0 - 1; }
+    if (load8(buf + 0) != 67) { return 0 - 1; }
+    if (load8(buf + 1) != 89) { return 0 - 1; }
+    if (load8(buf + 2) != 66) { return 0 - 1; }
+    if (load8(buf + 3) != 66) { return 0 - 1; }
+    var plen = load8(buf + 36) & 255;
+    plen = plen | ((load8(buf + 37) & 255) << 8);
+    plen = plen | ((load8(buf + 38) & 255) << 16);
+    plen = plen | ((load8(buf + 39) & 255) << 24);
+    if (plen < 2) { return 0 - 1; }
+    if (plen > 200) { return 0 - 1; }
+    var plain[256];
+    var got = decompress(FORMAT_ZLIB, buf + 40, len - 40, &plain, 256);
+    if (got != plen) { return 0 - 1; }
+    var mac[32];
+    hmac_sha256(save_key(), strlen(save_key()), &plain, plen, &mac);
+    var i = 0;
+    while (i < 32) {
+        if (load8(&mac + i) != load8(buf + 4 + i)) { return 0 - 2; }
+        i += 1;
+    }
+    return hs_deserialize(t, &plain, plen);
+}
+
+# Build "$HOME/<tail>" on the heap, or 0 if HOME is unset.
+fn save_path_for(tail): i64 {
+    var home = getenv("HOME");
+    if (home == 0) { return 0; }
+    var hl = strlen(home);
+    var tl = strlen(tail);
+    var p = alloc(hl + tl + 1);
+    memcpy(p, home, hl);
+    memcpy(p + hl, tail, tl);
+    store8(p + hl + tl, 0);
+    return p;
+}
+
+fn hs_dir(): i64 { return save_path_for("/.cyrius-bb"); }
+fn hs_path(): i64 { return save_path_for("/.cyrius-bb/scores.cyb"); }
+
+# Persist the table. Best-effort mkdir of ~/.cyrius-bb (ignores EEXIST).
+# Returns bytes written, or negative on error.
+fn hs_save(t): i64 {
+    var dir = hs_dir();
+    if (dir != 0) { syscall(83, dir, 493); } # mkdir 0755
+    var path = hs_path();
+    if (path == 0) { return 0 - 1; }
+    var buf[256];
+    var n = hs_encode(t, &buf, 256);
+    if (n < 0) { return n; }
+    return file_write_all(path, &buf, n);
+}
+
+# Load the table. Returns 0 ok; 1 if there is no file yet (first run —
+# not an error); -1 corrupt; -2 tampered. The table is untouched on any
+# failure, so the caller can keep the empty default.
+fn hs_load(t): i64 {
+    var path = hs_path();
+    if (path == 0) { return 0 - 1; }
+    var buf[256];
+    var n = file_read_all(path, &buf, 256);
+    if (n <= 0) { return 1; }
+    return hs_decode(t, &buf, n);
+}

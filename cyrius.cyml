@@ -54,6 +54,18 @@ stdlib = [
     "chrono",
     "tagged",
     "assert",
+    # M5 high-score save file (ADR 0003 — use the crates, don't self-roll
+    # zip/crypto). sankoch = compression, sigil = integrity hash. Both are
+    # bundled in the 6.0.1 toolchain snapshot, so they resolve from the
+    # pinned lib with no git fetch. freelist (sigil's allocator) + bigint /
+    # ct / keccak (sigil's signature-path deps) are pulled in so the build
+    # stays warning-free; the signature code itself is unused here.
+    "freelist",
+    "bigint",
+    "ct",
+    "keccak",
+    "sankoch",
+    "sigil",
 ]
 
 # mabda (GPU rendering) deferred per ADR 0003 — cyrius-bb self-rolls its
@@ -67,8 +79,11 @@ stdlib = [
 
 # sankoch (compression) + sigil (integrity hash) are the M5 high-score
 # save-file deps (ADR 0003 — we use them, don't self-roll crypto/zip).
-# They are dormant until M5, so they stay commented to keep the build
-# warning-free; uncomment when src/save.cyr lands.
+# WIRED at M5: both ship in the 6.0.1 toolchain lib snapshot, so they are
+# consumed via the [deps].stdlib list above (resolves from the pinned lib,
+# no network) rather than these git blocks. The git-source coordinates are
+# kept here for reference — switch to them if a future toolchain drops the
+# bundled copies. tags: sankoch 2.1.0, sigil 2.9.3.
 # [deps.sankoch]
 # git = "https://github.com/MacCracken/sankoch.git"
 # tag = "2.1.0"

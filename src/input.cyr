@@ -100,3 +100,13 @@ fn input_poll(): i64 {
     }
     return act;
 }
+
+# Read one raw byte from stdin (non-blocking): the byte (0..255), or -1
+# if nothing is waiting. For high-score initials entry. Not unit-tested
+# (no controlling terminal in CI).
+fn input_read_byte(): i64 {
+    var b[1];
+    var n = syscall(0, 0, &b, 1);
+    if (n <= 0) { return 0 - 1; }
+    return load8(&b);
+}

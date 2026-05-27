@@ -8,6 +8,7 @@ include "src/paddle.cyr"
 include "src/bricks.cyr"
 include "src/world.cyr"
 include "src/level.cyr"
+include "src/save.cyr"
 include "src/framebuf.cyr"
 include "src/render.cyr"
 include "src/fx.cyr"
@@ -297,6 +298,19 @@ fn test_hud() {
     fb_clear(f, 0, 0, 0);
     hud_draw_digit(f, 0, 0, 42, 1, 255, 255, 255);
     assert_eq(fb_get(f, 0, 0, 0), 0, "bad digit draws nothing");
+    # letter 'A' (idx 0) = rows 010/101/111/101/101
+    fb_clear(f, 0, 0, 0);
+    hud_draw_letter(f, 0, 0, 0, 1, 255, 255, 255);
+    assert_eq(fb_get(f, 1, 0, 0), 255, "'A' top-middle on");
+    assert_eq(fb_get(f, 0, 0, 0), 0, "'A' top-left off");
+    assert_eq(fb_get(f, 0, 2, 0), 255, "'A' crossbar row left on");
+    # hud_draw_char maps ASCII 'Z' (90) -> letter 25
+    fb_clear(f, 0, 0, 0);
+    hud_draw_char(f, 0, 0, 90, 1, 255, 255, 255);
+    assert_eq(fb_get(f, 0, 0, 0), 255, "'Z' top-left on");
+    assert_eq(fb_get(f, 0, 4, 0), 255, "'Z' bottom-left on");
+    hud_draw_char(f, 10, 0, 64, 1, 255, 255, 255);
+    assert_eq(fb_get(f, 10, 0, 0), 0, "'@' (non-letter) draws nothing");
     return 0;
 }
 
@@ -418,8 +432,64 @@ fn test_audio() {
     return 0;
 }
 
+fn test_scores() {
+    test_group("scores");
+    var t = hs_new();
+    assert_eq(hs_count(t), 0, "empty table");
+    assert_eq(hs_qualifies(t, 100), 1, "positive qualifies when empty");
+    assert_eq(hs_qualifies(t, 0), 0, "zero never qualifies");
+    # insert (A=65, B=66, C=67); kept sorted descending
+    assert_eq(hs_insert(t, 65, 65, 65, 100), 0, "first insert -> rank 0");
+    assert_eq(hs_insert(t, 66, 66, 66, 300), 0, "higher score -> rank 0");
+    assert_eq(hs_insert(t, 67, 67, 67, 200), 1, "middle score -> rank 1");
+    assert_eq(hs_count(t), 3, "three entries");
+    assert_eq(hs_score(t, 0), 300, "top = 300");
+    assert_eq(hs_score(t, 1), 200, "middle = 200");
+    assert_eq(hs_score(t, 2), 100, "bottom = 100");
+    assert_eq(hs_initial(t, 0, 0), 66, "top initials = B");
+    # overflow: fill past 10, cap holds and the lowest drops
+    var i = 0;
+    while (i < 10) {
+        hs_insert(t, 90, 90, 90, 1000 + i * 10);
+        i += 1;
+    }
+    assert_eq(hs_count(t), 10, "capped at 10");
+    assert_eq(hs_qualifies(t, 50), 0, "below lowest -> no");
+    assert_eq(hs_qualifies(t, 100000), 1, "above top -> yes");
+    # serialize round-trip
+    var sbuf[256];
+    var slen = hs_serialize(t, &sbuf);
+    var t2 = hs_new();
+    assert_eq(hs_deserialize(t2, &sbuf, slen), 0, "deserialize ok");
+    assert_eq(hs_count(t2), hs_count(t), "count round-trips");
+    assert_eq(hs_score(t2, 0), hs_score(t, 0), "top score round-trips");
+    # encode/decode round-trip (sankoch zlib + sigil hmac)
+    var ebuf[256];
+    var elen = hs_encode(t, &ebuf, 256);
+    assert_eq(elen > 40, 1, "encoded length past header");
+    var t3 = hs_new();
+    assert_eq(hs_decode(t3, &ebuf, elen), 0, "decode ok");
+    assert_eq(hs_score(t3, 0), hs_score(t, 0), "decoded top score matches");
+    assert_eq(hs_initial(t3, 0, 0), hs_initial(t, 0, 0), "decoded initials match");
+    # tamper: flip an HMAC byte -> rejected (-2), table left untouched
+    store8(&ebuf + 10, load8(&ebuf + 10) ^ 255);
+    var t4 = hs_new();
+    assert_eq(hs_decode(t4, &ebuf, elen), 0 - 2, "tampered HMAC -> -2");
+    assert_eq(hs_count(t4), 0, "table untouched on tamper");
+    # bad magic -> malformed
+    var junk[64];
+    var j = 0;
+    while (j < 64) {
+        store8(&junk + j, j);
+        j += 1;
+    }
+    assert_eq(hs_decode(hs_new(), &junk, 64), 0 - 1, "bad magic -> -1");
+    return 0;
+}
+
 fn main() {
     alloc_init();
+    fl_init();
     test_smoke();
     test_fixed();
     test_geom();
@@ -443,6 +513,7 @@ fn main() {
     test_bg();
     test_fx();
     test_audio();
+    test_scores();
     return assert_summary();
 }
 
