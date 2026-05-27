@@ -56,14 +56,20 @@ Shipped: parallax background (`render_bg` — depth zones + far/near vertical-ba
 
 **Acceptance**: the game reads as "2.5D arcade" vs "flat 2D" — a player with no context could tell the difference from a screenshot.
 
-### M4 — Audio pass (v0.5.0)
+### M4 — Audio pass (v0.5.0) — ✅ shipped 2026-05-26
 
-- `src/audio.cyr` — sound effects via shravan: paddle-ball blip, brick-destroy chirp, wall-bounce thud, game-over sting, level-complete fanfare
-- Era-spirit synthesis: square wave / simple FM via shravan primitives, no sampled audio
-- Optional slot-loaded music (user-provided `.ogg` files at `~/.cyrius-bb/music/<level>.ogg`); silent-by-default if absent
-- Mute toggle
+- `src/audio.cyr` — sound effects ~~via shravan~~ **self-rolled** (shravan has no consumable bundle + ALSA/Pulse need FFI; see [note 001](../architecture/001-no-ffi-audio.md)): paddle-ball blip, brick-destroy chirp, wall-bounce thud, ball-lost blip, game-over sting, level-complete arpeggio
+- Era-spirit synthesis: square wave (`synth_tone`, freq + amplitude sweep), unsigned 8-bit mono PCM — no sampled audio. Faithful to Breakout's 1976 square beeps
+- `src/sound.cyr` — best-effort OSS `/dev/dsp` sink; `audio_write_wav` + `programs/audio_demo.cyr` make the SFX hearable without a device
+- Mute toggle ('m')
+
+166 headless assertions; DCE binary 117,184 B. Detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.5.0]`.
 
 **Acceptance**: audio adds to the feel without demanding attention. Playtest confirms the SFX rhythm matches the gameplay rhythm.
+
+**Carried forward** (not blocking):
+- **Slot-loaded music deferred** — `.ogg` needs an OGG decoder, infeasible without FFI/a decoder crate. If revisited it will be WAV. The SFX-focused acceptance does not depend on music.
+- **Audible playback** needs an OSS device (`padsp` shim on modern desktops) — build-verified only, like `/dev/fb0`. WAV dumps are the always-works verification path. SFX *feel* + a possible voice mixer want a console ear.
 
 ### M5 — High-score persistence (v0.6.0)
 

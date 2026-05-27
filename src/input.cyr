@@ -14,6 +14,7 @@ enum InputAction {
     ACT_RIGHT = 2;
     ACT_LAUNCH = 4;
     ACT_QUIT = 8;
+    ACT_MUTE = 16;
 }
 
 enum TermConst {
@@ -31,6 +32,7 @@ fn bb_key_action(ch): i64 {
     if (ch == 32) { return ACT_LAUNCH; }    # space
     if (ch == 113) { return ACT_QUIT; }     # 'q'
     if (ch == 27) { return ACT_QUIT; }      # lone ESC
+    if (ch == 109) { return ACT_MUTE; }     # 'm'
     return 0;
 }
 

@@ -1,0 +1,31 @@
+# audio_demo.cyr — synthesise every SFX and dump it to a WAV file.
+#
+# Build: cyrius build programs/audio_demo.cyr build/audio_demo
+# Run:   ./build/audio_demo   (writes build/sfx_*.wav)
+# Hear:  any audio player, e.g. `ffplay build/sfx_brick.wav`.
+#
+# The ear-equivalent of demo.cyr's eyeball frames: lets the SFX be heard /
+# verified without a /dev/dsp device. See ADR 0003 +
+# docs/architecture/004-no-ffi-audio.md.
+
+include "src/audio.cyr"
+
+fn dump(id, path): i64 {
+    return audio_write_wav(sfx_buf(id), sfx_len(id), path);
+}
+
+fn main() {
+    alloc_init();
+    audio_init();
+    dump(SFX_PADDLE, "build/sfx_paddle.wav");
+    dump(SFX_BRICK, "build/sfx_brick.wav");
+    dump(SFX_WALL, "build/sfx_wall.wav");
+    dump(SFX_LOST, "build/sfx_lost.wav");
+    dump(SFX_OVER, "build/sfx_over.wav");
+    dump(SFX_FANFARE, "build/sfx_fanfare.wav");
+    println("cyrius-bb audio_demo: wrote build/sfx_*.wav (6 SFX)");
+    return 0;
+}
+
+var r = main();
+syscall(60, r);

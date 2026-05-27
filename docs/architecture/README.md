@@ -6,4 +6,4 @@ Not decisions (those live in [`../adr/`](../adr/)) and not guides. Items here de
 
 ## Items
 
-_Empty. Add numbered entries (`NNN-kebab-case.md`) when non-obvious invariants surface — e.g., paddle-english physics tuning, 2.5D depth-layer ordering constraints, shared-state quirks across kiran ECS + impetus physics._
+- [001 — no-FFI audio](001-no-ffi-audio.md): why audio is self-rolled square-wave PCM over OSS `/dev/dsp`, why there's no music, and the carried-forward console-playback caveat.

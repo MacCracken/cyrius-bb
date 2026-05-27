@@ -1,0 +1,153 @@
+# audio.cyr — era-spirit SFX synthesis. See ADR 0003.
+#
+# Self-rolled, like the renderer: shravan has no consumable dist bundle
+# (cyrius.cyml pending-deps) and ALSA/Pulse/PipeWire would need FFI
+# (banned), so cyrius-bb synthesises its own square-wave SFX on bare
+# stdlib — faithful to Breakout's 1976 square-beep palette anyway. See
+# docs/architecture/001-no-ffi-audio.md.
+#
+# This module is the *tested* core (no device I/O — sample-assertable,
+# CI-friendly), mirroring framebuf.cyr. The best-effort /dev/dsp sink is
+# the separate, untested src/sound.cyr (the present.cyr analogue), and
+# audio_write_wav dumps a buffer to disk so the SFX can actually be heard
+# (the ear-equivalent of fb_write_ppm's eyeball-able frames).
+#
+# PCM: unsigned 8-bit mono at AUDIO_RATE (the classic OSS default format),
+# so a buffer is byte-identical to both /dev/dsp data and 8-bit WAV data.
+# Centre/silence is 128. Requires the stdlib file I/O (for the WAV dump).
+
+enum Audio {
+    AUDIO_RATE = 11025; # samples/sec the synth assumes
+}
+
+# SFX ids — indices into the prebuilt buffer/length tables.
+enum Sfx {
+    SFX_PADDLE = 0;  # paddle-ball blip
+    SFX_BRICK = 1;   # brick-destroy chirp (rising)
+    SFX_WALL = 2;    # wall-bounce thud (low, falling)
+    SFX_LOST = 3;    # ball-lost blip (falling)
+    SFX_OVER = 4;    # game-over sting (long fall)
+    SFX_FANFARE = 5; # level-complete arpeggio
+    SFX_COUNT = 6;
+}
+
+var sfx_buf_tbl = 0; # SFX_COUNT i64 buffer pointers
+var sfx_len_tbl = 0; # SFX_COUNT i64 sample counts
+var audio_mute = 0;
+
+# Samples for a duration in milliseconds.
+fn ms_samples(ms): i64 { return AUDIO_RATE * ms / 1000; }
+
+# Fill buf[off .. off+len) with a square wave whose frequency sweeps
+# f0->f1 (Hz) and amplitude a0->a1 (0..127), both linear across the span.
+# Unsigned 8-bit, centred at 128. Returns samples written. Deterministic.
+fn synth_tone(buf, off, len, f0, f1, a0, a1): i64 {
+    var phase = 0; # samples elapsed in the current half-period
+    var hi = 1;    # 1 = high half, 0 = low half
+    var i = 0;
+    var f = 0;
+    var a = 0;
+    var half = 0;
+    var s = 0;
+    while (i < len) {
+        f = f0 + (f1 - f0) * i / len;
+        a = a0 + (a1 - a0) * i / len;
+        if (f < 1) { f = 1; }
+        half = AUDIO_RATE / (f + f);
+        if (half < 1) { half = 1; }
+        if (hi == 1) { s = 128 + a; } else { s = 128 - a; }
+        if (s < 0) { s = 0; }
+        if (s > 255) { s = 255; }
+        store8(buf + off + i, s);
+        phase += 1;
+        if (phase >= half) {
+            phase = 0;
+            if (hi == 1) { hi = 0; } else { hi = 1; }
+        }
+        i += 1;
+    }
+    return len;
+}
+
+# Allocate a one-tone SFX buffer and register it under id.
+fn sfx_make_tone(id, ms, f0, f1, a0, a1): i64 {
+    var len = ms_samples(ms);
+    var buf = alloc(len);
+    synth_tone(buf, 0, len, f0, f1, a0, a1);
+    store64(sfx_buf_tbl + id * 8, buf);
+    store64(sfx_len_tbl + id * 8, len);
+    return 0;
+}
+
+# Build all SFX buffers. Call once at start-up (like hud_init).
+fn audio_init(): i64 {
+    sfx_buf_tbl = alloc(SFX_COUNT * 8);
+    sfx_len_tbl = alloc(SFX_COUNT * 8);
+    sfx_make_tone(SFX_PADDLE, 40, 440, 460, 70, 12);   # crisp blip
+    sfx_make_tone(SFX_BRICK, 55, 700, 1150, 80, 8);    # rising chirp
+    sfx_make_tone(SFX_WALL, 55, 220, 120, 70, 8);      # low falling thud
+    sfx_make_tone(SFX_LOST, 220, 320, 110, 80, 0);     # falling blip
+    sfx_make_tone(SFX_OVER, 600, 260, 70, 90, 0);      # long descending sting
+    # fanfare: a 4-note rising arpeggio in one buffer
+    var seg = ms_samples(90);
+    var fan = alloc(seg * 4);
+    synth_tone(fan, seg * 0, seg, 523, 523, 70, 50);   # C5
+    synth_tone(fan, seg * 1, seg, 659, 659, 70, 50);   # E5
+    synth_tone(fan, seg * 2, seg, 784, 784, 70, 50);   # G5
+    synth_tone(fan, seg * 3, seg, 1047, 1047, 75, 5);  # C6 (decays)
+    store64(sfx_buf_tbl + SFX_FANFARE * 8, fan);
+    store64(sfx_len_tbl + SFX_FANFARE * 8, seg * 4);
+    return 0;
+}
+
+fn sfx_buf(id): i64 { return load64(sfx_buf_tbl + id * 8); }
+fn sfx_len(id): i64 { return load64(sfx_len_tbl + id * 8); }
+
+fn audio_muted(): i64 { return audio_mute; }
+fn audio_set_mute(m): i64 { audio_mute = m; return 0; }
+fn audio_toggle_mute(): i64 {
+    if (audio_mute == 1) { audio_mute = 0; } else { audio_mute = 1; }
+    return audio_mute;
+}
+
+# Write 4 / 2 little-endian bytes to fd (WAV header fields).
+fn wav_u32(fd, v): i64 {
+    var b[4];
+    store8(&b, v & 255);
+    store8(&b + 1, (v >> 8) & 255);
+    store8(&b + 2, (v >> 16) & 255);
+    store8(&b + 3, (v >> 24) & 255);
+    file_write(fd, &b, 4);
+    return 0;
+}
+fn wav_u16(fd, v): i64 {
+    var b[2];
+    store8(&b, v & 255);
+    store8(&b + 1, (v >> 8) & 255);
+    file_write(fd, &b, 2);
+    return 0;
+}
+
+# Dump a sample buffer to a canonical 8-bit unsigned mono WAV so the SFX
+# can be played back / verified. Returns 0, or -1 if the file won't open.
+# Not unit-tested (file I/O), like fb_write_ppm.
+fn audio_write_wav(buf, len, path): i64 {
+    var fd = file_open(path, 65, 0x1A4); # O_WRONLY|O_CREAT, 0644
+    if (fd < 0) { return 0 - 1; }
+    file_write(fd, "RIFF", 4);
+    wav_u32(fd, 36 + len);
+    file_write(fd, "WAVE", 4);
+    file_write(fd, "fmt ", 4);
+    wav_u32(fd, 16);           # PCM fmt chunk size
+    wav_u16(fd, 1);            # audio format: PCM
+    wav_u16(fd, 1);            # channels: mono
+    wav_u32(fd, AUDIO_RATE);   # sample rate
+    wav_u32(fd, AUDIO_RATE);   # byte rate (rate * 1ch * 1byte)
+    wav_u16(fd, 1);            # block align
+    wav_u16(fd, 8);            # bits per sample
+    file_write(fd, "data", 4);
+    wav_u32(fd, len);
+    file_write(fd, buf, len);
+    file_close(fd);
+    return 0;
+}

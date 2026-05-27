@@ -1,0 +1,44 @@
+# sound.cyr — best-effort /dev/dsp (OSS) SFX playback. See ADR 0003.
+#
+# The present.cyr analogue for audio: environment-specific, NOT unit-
+# tested, and degrades gracefully. OSS /dev/dsp is the only no-FFI sink
+# (ALSA/Pulse/PipeWire need a C library — banned). Modern desktops have
+# no /dev/dsp; an OSS shim (e.g. `padsp ./cyrius-bb`) or a console with
+# OSS is needed. If the device will not open, sound_play is a no-op and
+# the game runs silent. See docs/architecture/001-no-ffi-audio.md.
+#
+# Opened non-blocking so a write that won't fit the device buffer is
+# dropped rather than stalling the ~60 fps loop. Requires audio.cyr.
+
+var dsp_fd = 0 - 1;
+
+# Open /dev/dsp write-only + non-blocking and request the synth's rate
+# (SNDCTL_DSP_SPEED, best-effort). Returns the fd, or -1 if unavailable.
+fn sound_open(): i64 {
+    dsp_fd = file_open("/dev/dsp", 2049, 0); # O_WRONLY(1) | O_NONBLOCK(2048)
+    if (dsp_fd < 0) {
+        dsp_fd = 0 - 1;
+        return 0 - 1;
+    }
+    var rate = AUDIO_RATE;
+    syscall(16, dsp_fd, 0xC0045002, &rate); # SNDCTL_DSP_SPEED (ignored on fail)
+    return dsp_fd;
+}
+
+# Play SFX id once. No-op when muted or when no device is open. The write
+# is fire-and-forget (non-blocking); concurrent SFX do not mix yet — a
+# real mixer is a playtest-driven refinement if the feel needs it.
+fn sound_play(id): i64 {
+    if (audio_muted() == 1) { return 0; }
+    if (dsp_fd < 0) { return 0; }
+    file_write(dsp_fd, sfx_buf(id), sfx_len(id));
+    return 0;
+}
+
+fn sound_close(): i64 {
+    if (dsp_fd >= 0) {
+        file_close(dsp_fd);
+        dsp_fd = 0 - 1;
+    }
+    return 0;
+}

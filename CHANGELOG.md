@@ -4,6 +4,62 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-26
+
+**M4 — the audio pass.** Era-spirit square-wave SFX, self-rolled on bare
+stdlib — shravan has no consumable bundle and ALSA/Pulse/PipeWire need FFI
+(banned), so cyrius-bb synthesises its own sound the way it self-rolled the
+renderer ([ADR 0003](docs/adr/0003-self-rolled-primitives.md); rationale in
+[architecture note 001](docs/architecture/001-no-ffi-audio.md)). Square
+beeps are faithful to Breakout's 1976 sound anyway. 166 headless assertions
+(was 147). DCE release binary: **117,184 bytes** (was 111,688 at 0.4.0).
+
+### Added
+- `src/audio.cyr` — SFX synthesis: `synth_tone` (square wave, linear
+  frequency + amplitude sweep, unsigned 8-bit mono @ 11025 Hz) and six
+  prebuilt SFX (paddle blip, brick chirp, wall thud, ball-lost blip,
+  game-over sting, level-complete arpeggio). The *tested* core — no device
+  I/O, sample-assertable (mirrors `framebuf.cyr`). Plus `audio_write_wav`
+  (dump a buffer to a playable WAV) and a mute flag.
+- `src/sound.cyr` — best-effort OSS `/dev/dsp` sink (write-only,
+  non-blocking, requests the synth rate via `SNDCTL_DSP_SPEED`). The
+  `present.cyr` analogue: environment-specific, **not unit-tested**, a
+  silent no-op if the device is unavailable.
+- `programs/audio_demo.cyr` — dumps all six SFX to `build/sfx_*.wav` so the
+  sounds can be heard / verified without a device (the ear-equivalent of
+  `demo.cyr`'s eyeball frames).
+- `world.cyr` — `world_events` collision-event bitmask (`EV_WALL` /
+  `EV_PADDLE` / `EV_BRICK`), set per tick and cleared each step — the audio
+  trigger hook. `input.cyr` — `ACT_MUTE` ('m').
+- `docs/architecture/001-no-ffi-audio.md` — the no-FFI / no-OGG-decoder
+  constraint and its consequences.
+- `tests/` — `test_audio` (square-wave sample pattern, amp-0 silence, amp
+  envelope, SFX registry, mute toggle), `ACT_MUTE` decode, and `EV_*`
+  assertions on the wall/paddle/brick world-step tests. 19 new assertions.
+
+### Changed
+- `main.cyr` — `audio_init` at start-up; the interactive loop opens the
+  sink, fires SFX off the per-tick event bitmask + state transitions
+  (ball-lost, game-over, level-complete), toggles mute on 'm', and closes
+  the sink on exit. Headless mode stays silent (no device).
+
+### Feel
+- SFX params (frequencies, durations, envelopes) and the lack of a voice
+  mixer are playtest territory — the synthesis is verified (WAV dumps +
+  166 assertions), but whether the SFX *rhythm matches the gameplay rhythm*
+  wants a console ear. Tune in the playtest pass.
+
+**Carried forward** (not blocking):
+- **Music** (slot-loaded `.ogg`, roadmap M4) is **deferred** — OGG decode
+  is infeasible without FFI / a decoder; if revisited it will be WAV. The
+  SFX-focused M4 acceptance does not depend on it.
+- **Audible playback on a real device.** Modern desktops lack `/dev/dsp`;
+  needs an OSS shim (`padsp ./cyrius-bb`) or an OSS console — same
+  build-verified-only status as `/dev/fb0` present. WAV dumps are the
+  always-works verification path.
+- Carries from M1–M3: full console playthrough, depth-effect feel, camera
+  shake, game-over/complete screen (M6).
+
 ## [0.4.0] — 2026-05-26
 
 **M3 — the 2.5D depth pass.** The game now *reads* as 2.5D, not flat 2D

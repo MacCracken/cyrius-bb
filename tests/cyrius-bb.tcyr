@@ -13,6 +13,7 @@ include "src/render.cyr"
 include "src/fx.cyr"
 include "src/hud.cyr"
 include "src/input.cyr"
+include "src/audio.cyr"
 
 fn test_smoke() {
     test_group("smoke");
@@ -104,6 +105,7 @@ fn test_world_wall() {
     assert_eq(ball_vx(b), 0 - fixed_from_int(5), "right wall reflects vx");
     assert_eq(ball_x(b), fixed_from_int(198), "right wall clamps x to w-r");
     assert_eq(world_state(wd), WS_PLAYING, "still playing");
+    assert_eq((world_events(wd) & EV_WALL) != 0, 1, "wall bounce raises EV_WALL");
     return 0;
 }
 
@@ -130,6 +132,7 @@ fn test_world_paddle() {
     assert_eq(ball_vx(b), 0, "centre hit -> no english");
     assert_eq(ball_y(b), fixed_from_int(188), "ball nudged above paddle");
     assert_eq(world_state(wd), WS_PLAYING, "still playing after paddle");
+    assert_eq((world_events(wd) & EV_PADDLE) != 0, 1, "paddle bounce raises EV_PADDLE");
     return 0;
 }
 
@@ -145,6 +148,7 @@ fn test_world_brick() {
     assert_eq(brick_alive(g, 0), 0, "brick 0 destroyed");
     assert_eq(ball_vy(b), 0 - fixed_from_int(2), "brick reflects vy");
     assert_eq(world_state(wd), WS_PLAYING, "playing, bricks remain");
+    assert_eq((world_events(wd) & EV_BRICK) != 0, 1, "brick hit raises EV_BRICK");
     return 0;
 }
 
@@ -303,6 +307,7 @@ fn test_input() {
     assert_eq(bb_key_action(32), ACT_LAUNCH, "space -> LAUNCH");
     assert_eq(bb_key_action(113), ACT_QUIT, "'q' -> QUIT");
     assert_eq(bb_key_action(27), ACT_QUIT, "ESC -> QUIT");
+    assert_eq(bb_key_action(109), ACT_MUTE, "'m' -> MUTE");
     assert_eq(bb_key_action(120), 0, "'x' -> no action");
     return 0;
 }
@@ -381,6 +386,38 @@ fn test_level_progress() {
     return 0;
 }
 
+fn test_audio() {
+    test_group("audio");
+    audio_init();
+    var buf = alloc(64);
+    # square wave at 441 Hz -> half-period = 11025/(2*441) = 12 samples, amp 50
+    synth_tone(buf, 0, 64, 441, 441, 50, 50);
+    assert_eq(load8(buf + 0), 178, "square hi = 128 + amp");
+    assert_eq(load8(buf + 11), 178, "still hi through first half-period");
+    assert_eq(load8(buf + 12), 78, "flips to lo = 128 - amp");
+    assert_eq(load8(buf + 23), 78, "still lo through second half-period");
+    assert_eq(load8(buf + 24), 178, "flips back to hi");
+    # amp 0 -> centre (silence) regardless of phase
+    synth_tone(buf, 0, 64, 441, 441, 0, 0);
+    assert_eq(load8(buf + 0), 128, "amp 0 -> centre");
+    assert_eq(load8(buf + 40), 128, "amp 0 -> centre later");
+    # amplitude envelope: first sample carries a0
+    synth_tone(buf, 0, 64, 441, 441, 80, 0);
+    assert_eq(load8(buf + 0), 208, "amp envelope starts at a0");
+    # SFX registry built
+    assert_eq(sfx_len(SFX_PADDLE) > 0, 1, "paddle SFX built");
+    assert_eq(sfx_buf(SFX_BRICK) != 0, 1, "brick SFX buffer allocated");
+    assert_eq(sfx_len(SFX_FANFARE), ms_samples(90) * 4, "fanfare = 4 segments");
+    # mute toggle
+    audio_set_mute(0);
+    assert_eq(audio_muted(), 0, "starts unmuted");
+    assert_eq(audio_toggle_mute(), 1, "toggle -> muted");
+    assert_eq(audio_muted(), 1, "muted");
+    audio_toggle_mute();
+    assert_eq(audio_muted(), 0, "toggle -> unmuted");
+    return 0;
+}
+
 fn main() {
     alloc_init();
     test_smoke();
@@ -405,6 +442,7 @@ fn main() {
     test_colors();
     test_bg();
     test_fx();
+    test_audio();
     return assert_summary();
 }
 
