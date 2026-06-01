@@ -4,6 +4,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-06-01
+
+**Console-input fix.** First real-console playthrough surfaced a blocking-read
+bug: the interactive loop only advanced a frame when a key was pressed (the
+ball sat still between inputs). DCE release binary unchanged at **460,384 bytes**;
+199 headless assertions still green (the raw-tty path is device-only, not
+unit-tested).
+
+### Fixed
+- `input.cyr` — `input_init` set the raw-mode terminal control chars at the
+  wrong `c_cc` offsets: it zeroed `VTIME` (byte 22) and `VEOF` (byte 21) but
+  left `VMIN` (byte 23) at its inherited canonical value of `1`. With
+  `VMIN=1, VTIME=0`, `read()` on stdin blocks until a byte arrives, so
+  `input_poll`/`input_read_byte`/`input_nav` stalled the whole game loop
+  between keypresses. Now writes `VMIN=0` (byte 23) and `VTIME=0` (byte 22)
+  for the intended non-blocking poll. Console-only path — invisible to CI and
+  to the headless smoke; only a real-VT run exposes it.
+
 ## [0.7.0] — 2026-05-26
 
 **M6 — polish.** A title menu, pause, a beveled art pass, and a
