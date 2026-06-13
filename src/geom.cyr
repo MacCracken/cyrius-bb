@@ -39,9 +39,49 @@ fn paddle_english(ball_cx, paddle_cx, paddle_half_w): i64 {
     return fixed_clamp(off, (0 - FIXED_ONE), FIXED_ONE);
 }
 
-# Outbound horizontal velocity after a paddle hit: the english offset
-# scaled by the ball's horizontal speed budget. The caller flips vy
-# upward to complete the bounce.
-fn paddle_bounce_vx(english, max_vx): i64 {
-    return fixed_mul(english, max_vx);
+# Paddle rebound — speed-conserving. The english offset selects a discrete
+# rebound *zone* (Breakout's paddle was segmented into angle bands, ADR
+# 0001); the ball leaves at the supplied `speed`, so where it strikes the
+# paddle changes the outbound *angle*, never the speed. This replaces the
+# old paddle_bounce_vx, which set vx independently of vy and so let edge
+# hits add speed (roadmap game-loop bug #2). vy is always upward (< 0).
+#
+# Four magnitude zones (|english| bands) at ~0/20/40/55 deg from vertical.
+# zone_fx/zone_fy are unit vectors in 16.16 (fx^2 + fy^2 ~= FIXED_ONE), so
+# multiplying by `speed` preserves |v| with no runtime sqrt — the sqrt is
+# baked into the constants. fy carries the upward sign; vx takes english's.
+fn paddle_zone(english): i64 {
+    var a = fixed_abs(english);
+    if (a < 9830) { return 0; }   # |e| < 0.15  -> straight up
+    if (a < 26214) { return 1; }  # |e| < 0.40  -> ~20 deg
+    if (a < 45875) { return 2; }  # |e| < 0.70  -> ~40 deg
+    return 3;                      #             -> ~55 deg
+}
+
+# Unit horizontal magnitude (16.16) per zone. sin(0,20,40,55 deg).
+fn zone_fx(z): i64 {
+    if (z == 0) { return 0; }
+    if (z == 1) { return 22415; }
+    if (z == 2) { return 42125; }
+    return 53687;
+}
+
+# Unit vertical component (16.16, upward => negative) per zone. -cos(...).
+fn zone_fy(z): i64 {
+    if (z == 0) { return 0 - 65536; }
+    if (z == 1) { return 0 - 61583; }
+    if (z == 2) { return 0 - 50204; }
+    return 0 - 37593;
+}
+
+# Outbound vx after a paddle hit: speed * sin(zone), signed by english.
+fn paddle_rebound_vx(english, speed): i64 {
+    var fx = zone_fx(paddle_zone(english));
+    if (english < 0) { fx = 0 - fx; }
+    return fixed_mul(speed, fx);
+}
+
+# Outbound vy after a paddle hit: speed * -cos(zone) (always upward).
+fn paddle_rebound_vy(english, speed): i64 {
+    return fixed_mul(speed, zone_fy(paddle_zone(english)));
 }

@@ -135,16 +135,27 @@ fn level_make_bricks(idx, area_w): i64 {
     return bricks_from_cells(cols, rows, ox, oy, bw, bh, gx, gy, cells, LV_BASE_VALUE);
 }
 
-# Speed curve — serve velocity per level. Magnitude rises with idx; the
-# ramp stays gentle (vy peaks at 6 px/tick < brick height 8) so the ball
-# can't tunnel a brick. vx: 3,3,3,3,4  vy: -4,-4,-5,-5,-6.
-fn level_serve_vx(idx): i64 { return fixed_from_int(3 + asr(idx, 2)); }
-fn level_serve_vy(idx): i64 { return 0 - fixed_from_int(4 + asr(idx, 1)); }
+# Per-level target ball speed (16.16 px/tick magnitude). This is THE knob
+# the difficulty curve turns: the paddle bounce re-asserts |v| to it every
+# hit (world.cyr), so the ball holds exactly this speed within a level and
+# steps up between levels. Gentle ramp — 5.0, 5.5, 6.0, 6.5, 7.0 — kept so
+# the steepest rebound's vertical component (speed * 0.94) stays < brick
+# height (8) and the ball can't tunnel a row. 5.0 at L1 is deliberately
+# easy: the old curve let edge hits add speed, so L1 ran fast and was hard
+# to clear (roadmap game-loop bug #2); a conserved 5.0 is controllable.
+fn level_speed(idx): i64 { return fixed_from_int(5) + idx * FIXED_HALF; }
 
-# Advance to level idx: swap in its bricks and re-serve the ball at this
-# level's speed. Score / lives / paddle are left untouched (they carry).
+# Serve velocity per level — magnitude is level_speed(idx), direction is a
+# fixed 3-4-5 up-and-right unit (0.6, -0.8) so L1 still serves at exactly
+# (3, -4) and higher levels serve faster along the same line.
+fn level_serve_vx(idx): i64 { return fixed_mul(level_speed(idx), 39322); }
+fn level_serve_vy(idx): i64 { return 0 - fixed_mul(level_speed(idx), 52429); }
+
+# Advance to level idx: swap in its bricks, set its target speed, and
+# re-serve the ball at that speed. Score / lives / paddle carry (untouched).
 fn level_load(wd, idx, area_w, serve_x, serve_y): i64 {
     world_set_bricks(wd, level_make_bricks(idx, area_w));
+    world_set_speed(wd, level_speed(idx));
     world_serve(wd, serve_x, serve_y, level_serve_vx(idx), level_serve_vy(idx));
     return 0;
 }

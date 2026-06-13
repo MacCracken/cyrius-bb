@@ -104,23 +104,30 @@ First milestone to USE the shared crates (ADR 0003): sankoch + sigil wired from 
 ### Game-loop review backlog (target 0.7.2 — observed on first console playtest)
 
 > Two feel/physics issues surfaced on the first real-VT playthrough (after the
-> 0.7.1 input fix). **Deferred for a focused review pass**, logged here so they
-> don't get lost. Both are "feel" bugs that want a console eye to tune (CLAUDE.md:
-> *playtest over unit test for feel*); neither blocks the v1.0 *date* decision,
-> but both should be resolved before the v1.0 *quality* gate.
+> 0.7.1 input fix). **Both resolved in 0.7.2** (deterministic + unit-tested
+> cores); the analysis is kept below for the record. They are "feel" bugs whose
+> exact numbers still want a console eye to tune (CLAUDE.md: *playtest over unit
+> test for feel*) — the *mechanism* is fixed, the *tuning* is a playtest knob.
 
-**1. Paddle input feels slowed — hold-to-move isn't continuous.**
+**✅ 1. Paddle input feels slowed — hold-to-move isn't continuous.** *(0.7.2 —
+fixed via direction (a): the decaying key-held latch, `input_hold_step` /
+`PADDLE_HOLD_FRAMES`. Latch length is the playtest knob; if the one-time
+initial-repeat stall still bites, layer direction (b) `KDKBDREP` on the console.)*
 - *Symptom*: holding `a`/`d` (or arrows) lurches the paddle — a step, a stall, then steppy motion — instead of a smooth glide.
 - *Root cause (hypothesis)*: the loop treats "a movement byte arrived this frame" as "key held this frame" (`input_poll` → `ACT_LEFT`/`ACT_RIGHT` → one `paddle_move` of `dx=4px`). But raw-tty delivers the OS **key-repeat stream**, not a held state: ~250 ms initial-repeat delay, then ~30 bytes/s. At 60 fps that's one move, a ~15-frame stall, then a move every ~2 frames — exactly the "slowed, not respecting hold-down" feel.
 - *Fix directions (decide on review)*: **(a)** sticky/decaying key-held latch in the input layer — a movement byte arms "held for N frames", refreshed by each repeat byte, so the paddle moves every frame across the repeat gaps (tune N just over the repeat interval); smallest change, fits the existing poll model. **(b)** set the console repeat rate via the `KDKBDREP` tty ioctl (shorter delay/faster rate) — global console state, blunter. **(c)** read `/dev/input/eventX` for true key down/up — most correct, heaviest; weigh against accessible scope.
 
-**2. Ball speed changes for no physical reason (appears to speed up randomly).**
+**✅ 2. Ball speed changes for no physical reason (appears to speed up randomly).**
+*(0.7.2 — fixed: `paddle_rebound_vx/vy` give a speed-conserving rebound — english
+selects a discrete angle zone, the ball leaves at the level's target speed.
+Added `level_speed` (5.0 → 7.0) as the per-level scaling so speed is constant
+within a level and steps up between levels. Per-level numbers are a playtest knob.)*
 - *Symptom*: total ball speed jumps between rallies with no visible cause.
 - *Root cause*: the paddle bounce **does not conserve speed**. `world_step`'s paddle branch *sets* `vx = english × WO_ENGLISH` (english ∈ [−1,1], max 5 px/tick) and independently *negates* `vy` (magnitude unchanged). Outgoing speed = √(vy² + vx²): a centre hit (vx≈0) keeps speed, an edge hit (vx≈±5) **adds** a horizontal component without removing vertical → the ball gets faster. Since `vy` magnitude is otherwise invariant for the whole level (walls/bricks/paddle only ever negate a component), *where the ball strikes the paddle* is the only thing that moves total speed — which reads as inexplicable speed-up.
 - *Correct behavior*: paddle english sets the outbound **angle** at **constant speed**. Fix direction: on a paddle hit, take speed = |v_in| (or the level's target speed), derive an outbound angle from the english offset, then set (vx, vy) = speed·(sinθ, −cosθ) so |v_out| is preserved. Keep the per-level speed curve as the *only* intentional speed source.
-- *Related (fold into the same pass)*: brick collisions always `reflect(vy)` regardless of which side was struck (`world_step` brick branch) — side hits should flip `vx`. Not a speed bug, but the same axis-naive collision-response family. And resolution is single-axis-per-frame with no swept test, so tunneling/double-hit edge cases may appear at higher speeds — note for review, not necessarily a fix.
+- *Related (⏳ still open — not done in 0.7.2)*: brick collisions always `reflect(vy)` regardless of which side was struck (`world_step` brick branch) — side hits should flip `vx`. Not a speed bug, but the same axis-naive collision-response family. And resolution is single-axis-per-frame with no swept test, so tunneling/double-hit edge cases may appear at higher speeds (the `level_speed` cap of 7 < brick height 8 keeps the current ramp safe; revisit if speeds rise). Carry to a later pass.
 
-*Acceptance for the review pass*: holding a direction glides the paddle smoothly from the first frame; ball speed is constant within a level except the intended per-level step-up; edge-vs-centre paddle hits change **angle**, not speed.
+*Acceptance for the review pass*: holding a direction glides the paddle smoothly from the first frame; ball speed is constant within a level except the intended per-level step-up; edge-vs-centre paddle hits change **angle**, not speed. — **Mechanism met in 0.7.2** (unit-tested); smooth-glide *feel* + exact numbers confirmed on the console playtest.
 
 ### v1.0 — Ship (**2026-06-13 — Saturday**)
 

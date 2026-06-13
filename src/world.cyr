@@ -8,8 +8,9 @@
 # bricks.cyr — then this file.
 #
 # Heap struct, 11 x i64: ball, paddle, bricks, width, height, score,
-# lives, state, english (max horizontal velocity a full-edge paddle hit
-# imparts), last_hit (brick idx destroyed this tick, -1 if none) +
+# lives, state, speed (the level's target ball speed — a paddle bounce
+# re-asserts |v| to this, so english sets angle not speed; see geom.cyr
+# paddle_rebound), last_hit (brick idx destroyed this tick, -1 if none) +
 # last_tier (its tier). last_hit/last_tier are a visual-effects hook
 # (M3): the render loop reads them to spawn debris at the right spot +
 # colour. They do not affect the deterministic sim.
@@ -38,14 +39,14 @@ enum WorldField {
     WO_SCORE = 40;
     WO_LIVES = 48;
     WO_STATE = 56;
-    WO_ENGLISH = 64;
+    WO_SPEED = 64;
     WO_LAST_HIT = 72;
     WO_LAST_TIER = 80;
     WO_EVENTS = 88;
     WO_SIZE = 96;
 }
 
-fn world_new(ball, paddle, bricks, w, h, lives, english): i64 {
+fn world_new(ball, paddle, bricks, w, h, lives, speed): i64 {
     var wd = alloc(WO_SIZE);
     store64(wd + WO_BALL, ball);
     store64(wd + WO_PADDLE, paddle);
@@ -55,7 +56,7 @@ fn world_new(ball, paddle, bricks, w, h, lives, english): i64 {
     store64(wd + WO_SCORE, 0);
     store64(wd + WO_LIVES, lives);
     store64(wd + WO_STATE, WS_PLAYING);
-    store64(wd + WO_ENGLISH, english);
+    store64(wd + WO_SPEED, speed);
     store64(wd + WO_LAST_HIT, 0 - 1);
     store64(wd + WO_LAST_TIER, 0);
     store64(wd + WO_EVENTS, 0);
@@ -68,6 +69,11 @@ fn world_bricks(wd): i64 { return load64(wd + WO_BRICKS); }
 fn world_score(wd): i64 { return load64(wd + WO_SCORE); }
 fn world_lives(wd): i64 { return load64(wd + WO_LIVES); }
 fn world_state(wd): i64 { return load64(wd + WO_STATE); }
+# Target ball speed for the current level (16.16). The paddle bounce
+# re-asserts |v| to this, so speed is constant within a level and only
+# steps up between levels (level.cyr sets it via world_set_speed).
+fn world_speed(wd): i64 { return load64(wd + WO_SPEED); }
+fn world_set_speed(wd, s): i64 { store64(wd + WO_SPEED, s); return 0; }
 # Brick destroyed this tick (idx, or -1 if none) + its tier — a render-
 # loop hook for spawning debris. Cleared to -1 at the top of each step.
 fn world_last_hit(wd): i64 { return load64(wd + WO_LAST_HIT); }
@@ -145,8 +151,9 @@ fn world_step(wd): i64 {
         var pt = ball_y(b) - r;
         if (aabb_overlap(pl, pt, d, d, paddle_x(p), paddle_y(p), paddle_w(p), paddle_h(p)) == 1) {
             var eng = paddle_english(ball_x(b), paddle_cx(p), asr(paddle_w(p), 1));
-            ball_set_vx(b, paddle_bounce_vx(eng, load64(wd + WO_ENGLISH)));
-            ball_set_vy(b, reflect(ball_vy(b)));
+            var spd = load64(wd + WO_SPEED);
+            ball_set_vx(b, paddle_rebound_vx(eng, spd));
+            ball_set_vy(b, paddle_rebound_vy(eng, spd));
             ball_set_y(b, paddle_y(p) - r);
             world_add_event(wd, EV_PADDLE);
         }

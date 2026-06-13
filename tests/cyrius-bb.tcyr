@@ -23,6 +23,12 @@ fn test_smoke() {
     return 0;
 }
 
+# |a - b| < tol, for fixed-point approx checks (rounding in unit vectors).
+fn near(a, b, tol): i64 {
+    if (fixed_abs(a - b) < tol) { return 1; }
+    return 0;
+}
+
 fn test_fixed() {
     test_group("fixed");
     assert_eq(fixed_from_int(5), 5 * FIXED_ONE, "from_int(5)");
@@ -129,7 +135,9 @@ fn test_world_paddle() {
     var g = bricks_new(1, 1, fixed_from_int(10), fixed_from_int(10), fixed_from_int(8), fixed_from_int(4), 0, 0, 10);
     var wd = world_new(b, p, g, fixed_from_int(200), fixed_from_int(200), 3, fixed_from_int(4));
     world_step(wd);
-    assert_eq(ball_vy(b), 0 - fixed_from_int(5), "paddle reflects vy up");
+    # speed-conserving rebound: a centre hit leaves straight up at the
+    # world's target speed (4 here), independent of the incoming vy (5).
+    assert_eq(ball_vy(b), 0 - fixed_from_int(4), "centre hit -> up at target speed");
     assert_eq(ball_vx(b), 0, "centre hit -> no english");
     assert_eq(ball_y(b), fixed_from_int(188), "ball nudged above paddle");
     assert_eq(world_state(wd), WS_PLAYING, "still playing after paddle");
@@ -328,6 +336,12 @@ fn test_input() {
     assert_eq(bb_key_action(27), ACT_QUIT, "ESC -> QUIT");
     assert_eq(bb_key_action(109), ACT_MUTE, "'m' -> MUTE");
     assert_eq(bb_key_action(120), 0, "'x' -> no action");
+    # key-held latch: arming re-loads to PADDLE_HOLD_FRAMES, idle decays to 0
+    assert_eq(input_hold_step(0, 1), PADDLE_HOLD_FRAMES, "armed -> full latch");
+    assert_eq(input_hold_step(PADDLE_HOLD_FRAMES, 0), PADDLE_HOLD_FRAMES - 1, "idle decays by 1");
+    assert_eq(input_hold_step(1, 0), 0, "decays to 0");
+    assert_eq(input_hold_step(0, 0), 0, "stays at 0 when idle");
+    assert_eq(input_hold_step(2, ACT_LEFT), PADDLE_HOLD_FRAMES, "action bit re-arms latch");
     return 0;
 }
 
@@ -376,11 +390,41 @@ fn test_level() {
     var g4 = level_make_bricks(3, 200);
     assert_eq(bricks_total(g4), 45, "L4 grid 9x5");
     assert_eq(bricks_alive_count(g4), 40, "L4 has 5 gap cells");
-    # speed curve rises (and stays <= brick height for collision safety)
-    assert_eq(level_serve_vx(0), fixed_from_int(3), "L1 serve vx");
-    assert_eq(level_serve_vy(0), 0 - fixed_from_int(4), "L1 serve vy");
-    assert_eq(level_serve_vy(4), 0 - fixed_from_int(6), "L5 serve vy faster");
-    assert_eq(fixed_abs(level_serve_vy(4)) > fixed_abs(level_serve_vy(0)), 1, "speed climbs across levels");
+    # target speed climbs gently across levels (the difficulty knob)
+    assert_eq(level_speed(0), fixed_from_int(5), "L1 target speed = 5");
+    assert_eq(level_speed(4), fixed_from_int(7), "L5 target speed = 7");
+    assert_eq(level_speed(4) > level_speed(0), 1, "target speed climbs");
+    # serve velocity ~ (3, -4) at L1 along the 3-4-5 line, faster at L5
+    assert_eq(near(level_serve_vx(0), fixed_from_int(3), 64), 1, "L1 serve vx ~ 3");
+    assert_eq(near(level_serve_vy(0), 0 - fixed_from_int(4), 64), 1, "L1 serve vy ~ -4");
+    assert_eq(fixed_abs(level_serve_vy(4)) > fixed_abs(level_serve_vy(0)), 1, "serve faster at L5");
+    # serve magnitude == target speed (speed-conserving, no edge-hit drift)
+    assert_eq(near(fixed_mul(level_serve_vx(0), level_serve_vx(0)) + fixed_mul(level_serve_vy(0), level_serve_vy(0)), fixed_mul(level_speed(0), level_speed(0)), fixed_from_int(1)), 1, "L1 serve |v| = target speed");
+    # vy magnitude stays < brick height (8) so the ball can't tunnel a row
+    assert_eq(fixed_abs(level_serve_vy(4)) < fixed_from_int(8), 1, "L5 serve vy < brick height");
+    return 0;
+}
+
+fn test_rebound() {
+    test_group("rebound");
+    var s = fixed_from_int(5);
+    # centre hit -> straight up at full speed (vx 0, vy = -speed)
+    assert_eq(paddle_rebound_vx(0, s), 0, "centre rebound vx = 0");
+    assert_eq(paddle_rebound_vy(0, s), 0 - fixed_from_int(5), "centre rebound vy = -speed");
+    # english sign sets the vx direction; vy is always upward
+    assert_eq(paddle_rebound_vx(FIXED_ONE, s) > 0, 1, "right english -> vx > 0");
+    assert_eq(paddle_rebound_vx(0 - FIXED_ONE, s) < 0, 1, "left english -> vx < 0");
+    assert_eq(paddle_rebound_vy(FIXED_ONE, s) < 0, 1, "edge rebound still upward");
+    # speed conserved across the whole english range (unit-vector zones):
+    # |v|^2 stays ~ speed^2 regardless of where the ball strikes
+    var s2 = fixed_mul(s, s);
+    var e = 0 - FIXED_ONE;
+    while (e <= FIXED_ONE) {
+        var vx = paddle_rebound_vx(e, s);
+        var vy = paddle_rebound_vy(e, s);
+        assert_eq(near(fixed_mul(vx, vx) + fixed_mul(vy, vy), s2, fixed_from_int(1)), 1, "rebound conserves speed");
+        e = e + asr(FIXED_ONE, 2);
+    }
     return 0;
 }
 
@@ -514,6 +558,7 @@ fn main() {
     test_world_serve();
     test_level();
     test_level_progress();
+    test_rebound();
     test_colors();
     test_bg();
     test_fx();

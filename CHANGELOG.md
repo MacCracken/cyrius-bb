@@ -6,12 +6,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.7.2] — 2026-06-13
 
-**Toolchain bump + docs/backlog release — no game-code change.** Pins Cyrius
-`6.0.1 → 6.2.2` and records two game-loop feel/physics issues from the first
-console playtest (after the 0.7.1 input fix) **for a later focused review pass**
-rather than fixing them. 199 assertions still green; lint clean.
+**Toolchain bump + game-loop review pass.** Pins Cyrius `6.0.1 → 6.2.2` and
+acts on the two game-loop feel/physics issues the first console playtest (after
+the 0.7.1 input fix) surfaced: a slowed-feeling paddle and an unconserved ball
+speed. Both are now addressed in code with deterministic, unit-tested cores —
+the exact *feel* numbers (latch length, rebound angles, per-level speeds) are
+playtest knobs to tune on the console. 222 assertions green (was 199); lint clean.
+
+### Fixed
+- **Paddle hold-to-move no longer lurches** (game-loop bug #1). The loop moved
+  the paddle only on frames a raw-tty key-*repeat* byte arrived (~half the
+  frames once repeats start, after a ~250 ms initial stall), so a held key felt
+  slow and steppy. Added a decaying key-held latch (`input_hold_step`,
+  `PADDLE_HOLD_FRAMES`): a movement byte arms "held for N frames", refreshed by
+  each repeat byte, so the paddle glides every frame across the repeat gaps.
+  Pure + unit-tested; `N` is a playtest knob.
+- **Ball speed is conserved across paddle bounces** (game-loop bug #2). The
+  bounce set `vx = english × max` and only negated `vy`, so edge hits *added*
+  total speed — the ball sped up unpredictably and level 1 ran too fast to
+  clear. Replaced with a speed-conserving rebound (`paddle_rebound_vx/vy`):
+  english picks a discrete angle *zone* (Breakout's segmented paddle, ADR 0001)
+  and the ball leaves at the level's target speed, so paddle position changes
+  the outbound *angle*, never the speed. No runtime sqrt — the unit vectors are
+  baked constants.
 
 ### Changed
+- **Per-level speed scaling is now the difficulty knob.** Added `level_speed`
+  (5.0 → 7.0 px/tick across the 5 levels); the paddle bounce re-asserts `|v|` to
+  it every hit, so the ball holds exactly one speed within a level and only
+  steps up between levels. Serve velocity is derived from it along a fixed 3-4-5
+  line (L1 still serves at `(3, -4)`). The steepest rebound's vertical component
+  stays < brick height (8) so the ball can't tunnel a row. (`world` now carries
+  a target-speed field, repurposed from the old max-english slot.)
 - **Cyrius toolchain pin `6.0.1 → 6.2.2`** (`cyrius.cyml [package].cyrius`).
   Two manifest edits beyond the pin number, both forced by 6.1.x/6.2.x stdlib
   reorganisation (see `~/cyrius CHANGELOG`):
@@ -23,7 +49,7 @@ rather than fixing them. 199 assertions still green; lint clean.
     transitively pulls it with `thread`; sigil's HMAC path calls
     `thread_local_get/set`, so it's listed explicitly to keep the build clean.
   - `lib/` regenerated against 6.2.2 (72 → 42 vendored modules).
-- **DCE binary: 460,384 B → 1,113,336 B** (2.4×). ~+533 KB is the unavoidable
+- **DCE binary: 460,384 B → 1,114,888 B** (2.4×). ~+533 KB is the unavoidable
   cost of 6.2.2's larger folded stdlib bundles (sankoch/sigil/keccak/ct);
   ~+120 KB is `bayan`, kept for a warning-free build (its `u256_*` refs back
   sigil's otherwise-unreachable signature path). One residual advisory remains
@@ -31,17 +57,20 @@ rather than fixing them. 199 assertions still green; lint clean.
   game code (the framebuffer is heap-allocated). See [note 002](docs/architecture/002-save-deps-binary-size.md).
 
 ### Added
-- `docs/development/roadmap.md` — a "Game-loop review backlog (target 0.7.2)"
-  section with root-cause analysis + fix directions for both observations:
-  1. **Paddle input feels slowed / hold-down not continuous** — the loop reads
-     the raw-tty key-*repeat* stream as a held-key state, so a held direction
-     lurches (initial-repeat stall + repeat-rate gaps) instead of gliding.
-     Candidate fix: a sticky/decaying key-held latch in the input layer.
-  2. **Ball speed changes for no physical reason** — the paddle bounce sets
-     `vx = english × max` and only negates `vy`, so total speed √(vx²+vy²) is
-     not conserved: edge hits speed the ball up, centre hits slow it. Should
-     instead set outbound *angle* at constant speed. (Related: brick collisions
-     reflect `vy` regardless of struck side — fold into the same pass.)
+- `docs/development/roadmap.md` — the "Game-loop review backlog (target 0.7.2)"
+  section captures the root-cause analysis for both observations; #1 and #2 are
+  resolved this release, with the still-open follow-ups noted (below).
+
+### Feel
+- The new paddle latch, rebound zones, and speed curve are **deterministic and
+  unit-tested but not yet console-tuned** — `PADDLE_HOLD_FRAMES` (latch length /
+  post-release drift), the four rebound-zone angles, and the `level_speed`
+  ramp are all knobs to dial in on the real-VT playtest. The headless smoke
+  confirms a centre hit now rallies straight up at constant speed.
+- **Still open** (carried, not regressions): the brick collision still reflects
+  `vy` regardless of which side was struck (side hits should flip `vx`); single-
+  axis resolution with no swept test could tunnel at high speed; **camera shake
+  on impact stays deferred** to the console pass.
 
 ## [0.7.1] — 2026-06-01
 

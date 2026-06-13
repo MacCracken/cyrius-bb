@@ -156,13 +156,14 @@ fn build_world(): i64 {
     var b = ball_new(sx, sy, level_serve_vx(0), level_serve_vy(0), fixed_from_int(3));
     var p = paddle_new(fixed_from_int(PADDLE_X), fixed_from_int(138), fixed_from_int(40), fixed_from_int(6));
     var g = level_make_bricks(0, AREA_W);
-    return world_new(b, p, g, fixed_from_int(AREA_W), fixed_from_int(AREA_H), START_LIVES, fixed_from_int(5));
+    return world_new(b, p, g, fixed_from_int(AREA_W), fixed_from_int(AREA_H), START_LIVES, level_speed(0));
 }
 
-# Re-serve the ball after a loss, at the current level's speed.
+# Re-serve the ball after a loss, at the current level's target speed.
 fn serve(wd, level): i64 {
     var sx = fixed_from_int(SERVE_X);
     var sy = fixed_from_int(SERVE_Y);
+    world_set_speed(wd, level_speed(level));
     return world_serve(wd, sx, sy, level_serve_vx(level), level_serve_vy(level));
 }
 
@@ -230,15 +231,21 @@ fn play_game(f, scores): i64 {
     var paused = 0;
     var act = 0;
     var st = 0;
+    # Decaying key-held latches (see input_hold_step): a held a/d keeps the
+    # paddle gliding across the raw-tty key-repeat gaps instead of lurching.
+    var hold_l = 0;
+    var hold_r = 0;
     while (running == 1) {
         frame_sleep();
         act = input_poll();
         if ((act & ACT_QUIT) != 0) { running = 0; }
         if ((act & ACT_MUTE) != 0) { audio_toggle_mute(); }
         if ((act & ACT_PAUSE) != 0) { paused = 1 - paused; }
+        hold_l = input_hold_step(hold_l, act & ACT_LEFT);
+        hold_r = input_hold_step(hold_r, act & ACT_RIGHT);
         if (paused == 0) {
-            if ((act & ACT_LEFT) != 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
-            if ((act & ACT_RIGHT) != 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
+            if (hold_l > 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
+            if (hold_r > 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
             st = world_step(wd);
             spawn_fx(fx, wd);
             play_event_sfx(wd);
