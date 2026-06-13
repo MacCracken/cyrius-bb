@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "6.0.1"
+cyrius = "6.2.2"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
@@ -50,6 +50,10 @@ stdlib = [
     "hashmap",
     "process",
     "thread",
+    # thread_local was auto-pulled with `thread` at 6.0.1; 6.2.2's resolver
+    # no longer transitively includes it, so list it explicitly — sigil's
+    # HMAC path calls thread_local_get/set (else the linker warns undefined).
+    "thread_local",
     "fnptr",
     "chrono",
     "tagged",
@@ -60,8 +64,11 @@ stdlib = [
     # pinned lib with no git fetch. freelist (sigil's allocator) + bigint /
     # ct / keccak (sigil's signature-path deps) are pulled in so the build
     # stays warning-free; the signature code itself is unused here.
+    # (bigint/u128 were carved out of stdlib into the bayan bundle in
+    # 6.1.x slot 25 — canonical bayan_* API; sigil's bignum dep is now
+    # satisfied by the bayan bundle, which folds in json/toml/csv/base64.)
     "freelist",
-    "bigint",
+    "bayan",
     "ct",
     "keccak",
     "sankoch",

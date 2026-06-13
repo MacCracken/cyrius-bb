@@ -27,7 +27,7 @@ will be declined regardless of code quality.
 ## Prerequisites
 
 - [Cyrius](https://github.com/MacCracken/cyrius) at the version pinned in
-  [`cyrius.cyml`](cyrius.cyml) `[package].cyrius` (currently `6.0.1`) — ships
+  [`cyrius.cyml`](cyrius.cyml) `[package].cyrius` (currently `6.2.2`) — ships
   the `cyrius` CLI and the stdlib cyrius-bb depends on.
 - No C toolchain, no FFI. The Cyrius game stack (mabda / kiran / impetus /
   shravan) and stdlib carry everything — see [`README.md`](README.md).

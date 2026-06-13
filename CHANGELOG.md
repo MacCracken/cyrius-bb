@@ -4,6 +4,45 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-06-13
+
+**Toolchain bump + docs/backlog release — no game-code change.** Pins Cyrius
+`6.0.1 → 6.2.2` and records two game-loop feel/physics issues from the first
+console playtest (after the 0.7.1 input fix) **for a later focused review pass**
+rather than fixing them. 199 assertions still green; lint clean.
+
+### Changed
+- **Cyrius toolchain pin `6.0.1 → 6.2.2`** (`cyrius.cyml [package].cyrius`).
+  Two manifest edits beyond the pin number, both forced by 6.1.x/6.2.x stdlib
+  reorganisation (see `~/cyrius CHANGELOG`):
+  - `[deps].stdlib`: **`bigint` → `bayan`.** The 6.1.x "bayan distfile carve"
+    moved `bigint`/`u128` (+ json/toml/csv/base64) out of stdlib into the
+    **bayan** sibling bundle (canonical `bayan_*` API). sigil's bignum path is
+    now satisfied by `bayan`. Not a rename or a drop — a carve.
+  - `[deps].stdlib`: **added `thread_local`.** 6.2.2's resolver no longer
+    transitively pulls it with `thread`; sigil's HMAC path calls
+    `thread_local_get/set`, so it's listed explicitly to keep the build clean.
+  - `lib/` regenerated against 6.2.2 (72 → 42 vendored modules).
+- **DCE binary: 460,384 B → 1,113,336 B** (2.4×). ~+533 KB is the unavoidable
+  cost of 6.2.2's larger folded stdlib bundles (sankoch/sigil/keccak/ct);
+  ~+120 KB is `bayan`, kept for a warning-free build (its `u256_*` refs back
+  sigil's otherwise-unreachable signature path). One residual advisory remains
+  — `large static data (335 KB)` from the stdlib bundles' lookup tables, not
+  game code (the framebuffer is heap-allocated). See [note 002](docs/architecture/002-save-deps-binary-size.md).
+
+### Added
+- `docs/development/roadmap.md` — a "Game-loop review backlog (target 0.7.2)"
+  section with root-cause analysis + fix directions for both observations:
+  1. **Paddle input feels slowed / hold-down not continuous** — the loop reads
+     the raw-tty key-*repeat* stream as a held-key state, so a held direction
+     lurches (initial-repeat stall + repeat-rate gaps) instead of gliding.
+     Candidate fix: a sticky/decaying key-held latch in the input layer.
+  2. **Ball speed changes for no physical reason** — the paddle bounce sets
+     `vx = english × max` and only negates `vy`, so total speed √(vx²+vy²) is
+     not conserved: edge hits speed the ball up, centre hits slow it. Should
+     instead set outbound *angle* at constant speed. (Related: brick collisions
+     reflect `vy` regardless of struck side — fold into the same pass.)
+
 ## [0.7.1] — 2026-06-01
 
 **Console-input fix.** First real-console playthrough surfaced a blocking-read
