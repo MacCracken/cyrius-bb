@@ -4,6 +4,48 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-29
+
+**Audio moves to ALSA via vani; toolchain bump to Cyrius 6.3.5.** The
+square-wave SFX synthesis is unchanged, but playback now routes through vani's
+`audio_*` core shim (vendored `vendor/vani-core.cyr`) — direct ALSA PCM ioctls
+in pure Cyrius — instead of the legacy OSS `/dev/dsp` sink, which was silent on
+modern ALSA-only systems. 222 assertions green; lint clean.
+
+### Added
+- **vani-core ALSA playback backend** (`vendor/vani-core.cyr`, vani 0.9.6
+  `core` profile — the 22 `audio_*` symbols). `src/sound.cyr` now opens
+  `/dev/snd/pcmC{card}D{device}p` via `audio_open_playback` / `audio_set_params`
+  / `audio_prepare`, writes SFX with `audio_write_bytes`, and tears down with
+  `audio_drain` / `audio_close`. Card/device default to 1/0 (editable
+  `SoundDev` constants — vani's verified analog target); graceful silent-degrade
+  preserved (no device → no-op). cyrius-bb is now a downstream vani consumer.
+
+### Changed
+- **Cyrius pin `6.2.2` → `6.3.5`.** Clears the build-time pin-drift warning and
+  the `ERR_INVALID_INPUT` duplicate-symbol collision — 6.3.5's sigil namespaces
+  its error enum to `SIGIL_ERR_*`, leaving sankoch the sole definer.
+- **`[deps].stdlib`: added `random`** (6.3.x sigil's HMAC/nonce path calls
+  `random_bytes`). `thread_local` and the `bench` harness are manual-include
+  modules as of 6.3.x — `src/main.cyr` and the test/bench/fuzz entry points now
+  `include "lib/thread_local.cyr"` explicitly (else 6.3.2's reachable-undefined-
+  function check fatals on sigil's auto-prepended crypto-TLS path).
+- **Bench harness modernized** to `lib/bench.cyr`'s `bench_new` / `bench_run` /
+  `bench_report` API (the old runtime-injected `bench()` was removed at 6.3.x).
+
+### Fixed
+- **Audio is audible on modern desktops.** The vani ALSA sink plays on any box
+  with a sound card; the prior OSS `/dev/dsp` path was silent on ALSA-only
+  systems (no `/dev/dsp`). The no-FFI rule is satisfied — vani speaks ALSA in
+  pure Cyrius (`docs/architecture/001-no-ffi-audio.md` updated).
+
+### Verified
+- `CYRIUS_DCE=1 cyrius build`: clean, 1,366,808 B x86_64 ELF (no pin-drift, no
+  `ERR_INVALID_INPUT`, no undefined-function errors).
+- `cyrius test tests/cyrius-bb.tcyr`: **222 / 222** pass.
+- `cyrius bench` (noop) + fuzz build: clean under 6.3.5.
+- `cyrius lint src/*.cyr`: clean. `cyrius fmt`: diff-clean across changed files.
+
 ## [0.7.2] — 2026-06-13
 
 **Toolchain bump + game-loop review pass.** Pins Cyrius `6.0.1 → 6.2.2` and

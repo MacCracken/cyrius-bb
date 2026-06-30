@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "6.2.2"
+cyrius = "6.3.5"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
@@ -54,6 +54,10 @@ stdlib = [
     # no longer transitively includes it, so list it explicitly — sigil's
     # HMAC path calls thread_local_get/set (else the linker warns undefined).
     "thread_local",
+    # random = kernel CSPRNG (getrandom). 6.3.x sigil's HMAC/nonce path
+    # calls random_bytes (the 6.2.2 sigil did not); cyrius 6.3.2 made a
+    # reachable undefined-fn call a hard build error, so list it explicitly.
+    "random",
     "fnptr",
     "chrono",
     "tagged",

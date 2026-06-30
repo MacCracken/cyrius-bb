@@ -1,13 +1,25 @@
 # cyrius-bb benchmarks
-# Stdlib auto-included via cyrius.toml
+# Stdlib auto-included via cyrius.cyml [deps].
 
-fn bench_noop() { return 0; }
+# thread_local: manual-include stdlib module (cyrius 6.3.x) — the
+# auto-prepended sigil references thread_local_*; include it so the
+# build does not fatal on a reachable undefined function.
+include "lib/thread_local.cyr"
+# bench harness — explicit include as of cyrius 6.3.x (replaces the old
+# runtime-injected bench(name, fp, n) with bench_new + bench_run + report).
+include "lib/bench.cyr"
+
+# Placeholder noop bench — real game-loop benches land as the harness grows.
+fn bench_noop_body() {
+    return 0;
+}
 
 fn main() {
     alloc_init();
-    bench("noop", &bench_noop, 1000000);
+    var b = bench_new("noop");
+    bench_run(b, &bench_noop_body, 1000000);
+    bench_report(b);
     return 0;
 }
 
 var r = main();
-syscall(60, r);

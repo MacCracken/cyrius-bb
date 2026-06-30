@@ -1,6 +1,11 @@
 # cyrius-bb test suite
 # stdlib auto-included via cyrius.cyml [deps]; project modules below.
 
+# thread_local is a manual-include stdlib module as of cyrius 6.3.x (see
+# src/main.cyr) — save.cyr reaches sigil's crypto-TLS path, so the test
+# unit needs it explicitly too or the linker fatals on a reachable undef.
+include "lib/thread_local.cyr"
+
 include "src/fixed.cyr"
 include "src/geom.cyr"
 include "src/ball.cyr"

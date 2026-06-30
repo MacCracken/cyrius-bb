@@ -1,5 +1,10 @@
 # cyrius-bb fuzz harness
 
+# thread_local: manual-include stdlib module (cyrius 6.3.x) — the
+# auto-prepended sigil references thread_local_*; include it so the
+# build does not fatal on a reachable undefined function.
+include "lib/thread_local.cyr"
+
 fn fuzz_main(data, len) {
     if (len == 0) { return 0; }
     return 0;

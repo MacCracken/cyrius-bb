@@ -9,6 +9,12 @@
 # stdlib auto-included via cyrius.cyml; project modules included below
 # in dependency order.
 
+# thread_local is a manual-include stdlib module as of cyrius 6.3.x — it is
+# resolved into lib/ by the `thread_local` [deps].stdlib entry but no longer
+# auto-prepended, so include it explicitly (sigil's crypto-TLS path calls
+# thread_local_init/get/set; 6.3.2 makes a reachable undefined call fatal).
+include "lib/thread_local.cyr"
+
 include "src/fixed.cyr"
 include "src/geom.cyr"
 include "src/ball.cyr"
@@ -24,6 +30,7 @@ include "src/hud.cyr"
 include "src/input.cyr"
 include "src/present.cyr"
 include "src/audio.cyr"
+include "vendor/vani-core.cyr"   # vani-core: ALSA audio_* shim for src/sound.cyr
 include "src/sound.cyr"
 include "src/tick.cyr"
 
