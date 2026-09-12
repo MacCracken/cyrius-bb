@@ -120,7 +120,7 @@ fn render_world(f, wd): i64 {
 
     var p = world_paddle(wd);
     draw_paddle(f, fixed_to_int(paddle_x(p)), fixed_to_int(paddle_y(p)),
-    fixed_to_int(paddle_w(p)), fixed_to_int(paddle_h(p)));
+      fixed_to_int(paddle_w(p)), fixed_to_int(paddle_h(p)));
 
     var b = world_ball(wd);
     var rr = fixed_to_int(ball_r(b));

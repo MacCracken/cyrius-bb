@@ -150,9 +150,9 @@ fn fx_render(f, fx): i64 {
             cx = fixed_to_int(load64(p + PT_X)) - half;
             cy = fixed_to_int(load64(p + PT_Y)) - half;
             fb_fill_rect(f, cx, cy, side, side,
-            load64(p + PT_R) * life / maxlife,
-            load64(p + PT_G) * life / maxlife,
-            load64(p + PT_B) * life / maxlife);
+              load64(p + PT_R) * life / maxlife,
+              load64(p + PT_G) * life / maxlife,
+              load64(p + PT_B) * life / maxlife);
         }
         i += 1;
     }
