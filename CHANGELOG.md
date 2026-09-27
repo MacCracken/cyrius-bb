@@ -4,6 +4,78 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-09-26
+
+**Dependency-currency release: toolchain `6.6.2 → 6.6.6`, vani-core re-vendored
+`0.9.9 → 1.2.5`.** No gameplay, render, audio-synth or save-format change. The
+headless smoke, every demo artifact (frames, font and table renders, all six SFX
+WAVs) and the high-score file are byte-identical to 0.8.2's. 222 assertions
+green; lint + fmt clean.
+
+### Changed
+- **Cyrius pin `6.6.2` → `6.6.6`** (`cyrius.cyml [package].cyrius`). `lib/`
+  re-vendored with `cyrius deps`, which 6.6.5 requires at the bump (its aarch64
+  syscall peer moved `SYS_UNLINKAT` 35 → 263). All 53 modules are byte-identical
+  to the 6.6.6 snapshot, including two new files: the platform peer
+  `lib/alloc_cx.cyr` and `lib/sys.cyr` (below). The
+  snapshot's folded crates move with it: **sankoch 2.7.14 → 2.8.0**, **sigil
+  3.12.16 → 3.12.18**, **bayan 1.5.5 → 1.5.6**. These are the newest versions a
+  toolchain ships. Upstream sigil 3.13.2 and bayan 1.5.7 arrive with the next
+  snapshot refold, since the snapshot copy wins over a same-named git dep. Neither
+  touches a path this game uses: sigil 3.13.x is ed25519/ECDSA/SHA-512
+  hardening, and bayan 1.5.7 fixes its f64 parser.
+- **`[deps].stdlib`: added `sys`.** sigil 3.12.18's `agnosys_uname` calls
+  `lib/sys.cyr`'s `sys_uname` (3.12.16 used a raw syscall). Unlisted, the build
+  warns `undefined function 'sys_uname'` and that call compiles to a trap. It is
+  listed before `sigil`, as sigil's README requires.
+- **Re-vendored `vani-core` 0.9.9 → 1.2.5** (`vendor/vani-core.cyr`, read from
+  the vani `1.2.5` tag). The `audio_*` changes are additive only
+  (`audio_set_params_fmt`, `audio_avail`, `audio_write_nb`). The six calls in
+  `src/sound.cyr` keep their signatures, so no call site changed. vani 1.2.3's
+  Result-pair break (`vani_result_unwrap`) is in the full profile only, not the
+  `core` fold.
+- `cyrius.cyml`: the commented `[deps.sankoch]` / `[deps.sigil]` fallback
+  coordinates now match what the snapshot folds (2.8.0 / 3.12.18; they said
+  2.1.0 / 2.9.3). `vendor/README.md`: the version line is refreshed (it still
+  said 0.9.6), the `string` stdlib requirement is noted, and the refresh recipe
+  now reads the file from the release tag instead of a working tree.
+- **DCE binary: 832,152 B → 999,864 B (+167,712 B, +20.2%).** An A/B build
+  attributes it:
+  - The 6.6.6 compiler alone is **−8,112 B**: with the 6.6.2 stdlib held
+    constant, it builds 824,040 B.
+  - **sankoch 2.8.0 is +171,440 B.** Its new Brotli decoder, with the 122,784 B
+    RFC 7932 static dictionary, is dispatched from the generic `decompress()`.
+    `src/save.cyr` calls `decompress()` with `FORMAT_ZLIB`, so DCE must keep the
+    decoder.
+  - sigil and the rest of the stdlib: +4,320 B.
+  - vani 1.2.5: +64 B. DCE drops its new, unused functions.
+
+  The static-data advisory moved 383,568 → 394,048 B.
+
+### Known warnings (upstream sigil, harmless)
+- `duplicate fn 'uname_release'` (`lib/sigil.cyr:746` vs `lib/sys.cyr`). sigil
+  3.12.18 still carries its own copy, identical in body and `UTS_*` values on
+  every target. sigil 3.13.1 drops it, so the warning clears at the next
+  toolchain refold. hoosh and majra carry the same warning at 6.6.6.
+- `lib/sigil.cyr:25118: array local over the per-fn frame budget gets STATIC
+  storage`. This is sigil's `var buf[262144]` crypto-bank init, stored exactly
+  as before; 6.6.5 only promoted the compiler's `note:` to a `warning:`.
+
+### Verified
+- `CYRIUS_DCE=1 cyrius build`: clean, 999,864 B x86_64 ELF. It is reproducible:
+  a clean copy of the tree builds a byte-identical binary. Plain build: 2,068,920 B.
+- `cyrius test tests/cyrius-bb.tcyr`: **222 / 222** pass.
+- `cyrius lint src/*.cyr`: 0 warnings on all 18 files. `cyrius fmt --check`:
+  clean on all 18.
+- `programs/{demo,audio_demo,scores_demo}.cyr` and the bench/fuzz entry points
+  build. Every artifact they write is byte-identical to a 6.6.2 build, and so
+  is the `<frames>` headless smoke (60 / 600 / 3000 ticks, including the final
+  frame's PPM).
+- **Save-file compatibility, both directions.** 0.8.2 and 0.8.3 write
+  byte-identical `scores.cyb` files. Each version loads the other's file intact,
+  and a tampered file is still rejected on 0.8.3 (`-2`, HMAC mismatch).
+- The 6.6.6 release tarball is published, so CI's pin-read install step resolves.
+
 ## [0.8.2] - 2026-09-11
 
 ### Changed

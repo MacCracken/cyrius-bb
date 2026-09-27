@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "6.6.2"
+cyrius = "6.6.6"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
@@ -58,6 +58,14 @@ stdlib = [
     # calls random_bytes (the 6.2.2 sigil did not); cyrius 6.3.2 made a
     # reachable undefined-fn call a hard build error, so list it explicitly.
     "random",
+    # sys = system introspection (uname/sysinfo). 6.6.6 bundles sigil
+    # 3.12.18, whose agnosys_uname calls lib/sys.cyr's sys_uname (the
+    # 3.12.16 sigil in 6.6.2 used a raw syscall); unlisted, the build warns
+    # `undefined function 'sys_uname'` and that call compiles to a trap.
+    # Must precede sigil. sigil 3.12.18 still carries its own uname_release
+    # + UTS_* offsets (identical body and values), so expect one benign
+    # `duplicate fn 'uname_release'` until a toolchain folds sigil >= 3.13.1.
+    "sys",
     "fnptr",
     "chrono",
     "tagged",
@@ -94,15 +102,17 @@ stdlib = [
 # consumed via the [deps].stdlib list above (resolves from the pinned lib,
 # no network) rather than these git blocks. The git-source coordinates are
 # kept here for reference — switch to them if a future toolchain drops the
-# bundled copies. tags: sankoch 2.1.0, sigil 2.9.3.
+# bundled copies. Tags track what the pinned 6.6.6 snapshot folds: sankoch
+# 2.8.0, sigil 3.12.18. The snapshot copy wins over a same-named [deps.*]
+# block, so switching means dropping the name from [deps].stdlib too.
 # [deps.sankoch]
 # git = "https://github.com/MacCracken/sankoch.git"
-# tag = "2.1.0"
+# tag = "2.8.0"
 # modules = ["dist/sankoch.cyr"]
 #
 # [deps.sigil]
 # git = "https://github.com/MacCracken/sigil.git"
-# tag = "2.9.3"
+# tag = "3.12.18"
 # modules = ["dist/sigil.cyr"]
 
 # ── Pending deps: not yet wireable ───────────────────────────────────

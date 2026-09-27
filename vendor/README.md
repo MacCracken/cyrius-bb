@@ -7,12 +7,14 @@ Third-party single-file snapshots that are **deliberately committed**
 
 - **Source**: [vani](https://github.com/MacCracken/vani) `dist/vani-core.cyr`
   (the `core` profile — the playback-only ALSA PCM shim: the `audio_*` API).
-- **Version**: 0.9.6 (vani pins cyrius 6.3.5; we build on 6.2.2).
+- **Version**: 1.2.5, copied from the vani `1.2.5` tag (vani pins cyrius 6.6.2;
+  we build on 6.6.6).
 - **Consumed by**: `src/sound.cyr` (via `audio_open_playback` /
   `audio_set_params` / `audio_prepare` / `audio_write_bytes` / `audio_drain` /
   `audio_close`). `include "vendor/vani-core.cyr"` sits before `src/sound.cyr`
-  in `src/main.cyr`'s chain; it needs only the `syscalls` + `alloc` stdlib
-  modules, both already in `cyrius.cyml [deps].stdlib`.
+  in `src/main.cyr`'s chain; it needs only the `syscalls` + `string` + `alloc`
+  stdlib modules (vani's `dist/vani-core.deps` sidecar), all already in
+  `cyrius.cyml [deps].stdlib`.
 - **Why vendored instead of a `[deps.vani]` git dependency**: keeps the
   "bare stdlib / zero external deps" build lean — resolving vani as a git dep
   pulls its whole manifest tree (yukti, patra, sakshi) into `lib/`. The core
@@ -24,7 +26,7 @@ Third-party single-file snapshots that are **deliberately committed**
 ### Refreshing to a newer vani
 
 ```sh
-# from a checkout/release of vani at the desired tag:
-cp /path/to/vani/dist/vani-core.cyr vendor/vani-core.cyr
+# read the file from the release tag, not the working tree (which may be dirty):
+git -C /path/to/vani show <tag>:dist/vani-core.cyr > vendor/vani-core.cyr
 # bump the Version line above; no call-site changes if the audio_* API is stable
 ```
