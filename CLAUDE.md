@@ -42,7 +42,7 @@ Project was scaffolded with `cyrius init cyrius-bb` on 2026-04-24. **Do not manu
 ```bash
 cyrius deps                                                # resolve stdlib deps
 cyrius build src/main.cyr build/cyrius-bb                  # build
-cyrius test src/test.cyr                                   # unit tests
+cyrius test tests/cyrius-bb.tcyr                           # unit tests
 CYRIUS_DCE=1 cyrius build src/main.cyr build/cyrius-bb     # release-parity build
 ```
 
