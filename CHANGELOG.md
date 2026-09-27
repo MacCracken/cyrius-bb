@@ -4,6 +4,119 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+**Sound actually plays.** A hardware probe on the dev box (card 1, the ALC897
+analog PCM) showed the in-game audio has been silent since the 0.8.0 ALSA port,
+behind an unchecked return value. The fix renders in the device's own format,
+keeps the stream recoverable between cues, and fails silent rather than broken.
+It is cyrius-polyomino's audio fix, adapted to cyrius-bb's pre-rendered SFX
+cache.
+
+### Fixed
+- **A format the device accepts.** `sound_open` asked the raw `hw:1,0` PCM for
+  11025 Hz mono 8-bit, but the codec takes only S16_LE / S32_LE, exactly 2
+  channels, at 44.1 kHz and up, and a raw hw PCM does no conversion.
+  `HW_PARAMS` returned `-EINVAL`, and with its return unchecked every later
+  write failed silently. `src/audio.cyr` now renders **48 kHz S16_LE
+  interleaved stereo** (L == R), and `src/sound.cyr` programs it with vani's
+  explicit-format `audio_set_params_fmt(…, SND_PCM_FORMAT_S16_LE, …)`. The
+  square wave, sweeps and envelopes are unchanged, still integer-only and
+  deterministic. Amplitudes scale ×256 (8-bit steps → S16), so every cue keeps
+  its fraction of full scale. This also retires the sign bug `state.md` flagged
+  at 0.8.3: the synth wrote *unsigned* 8-bit (silence = 128) while vani's
+  `bits = 8` programs *signed* S8. The one-line `SND_PCM_FORMAT_U8` fix
+  proposed there would not have helped, because this codec refuses 8-bit
+  outright.
+- **Every cue after the first.** The ring is fed only on events, so each cue
+  ends with it running dry and the kernel stopping the stream (XRUN; the
+  default `stop_threshold` is the buffer size). Every later write got `-EPIPE`
+  until a PREPARE that nothing issued. `sound_play` now re-prepares and retries
+  once on `-EPIPE` / `-ESTRPIPE`; the policy is the pure, tested
+  `sound_write_recoverable`. On the hardware, every cue after the first takes
+  that path.
+- **No loop stalls on long cues.** Left to pick, the kernel gives this codec a
+  1024-frame (21 ms) ring, so the blocking write of the 600 ms game-over sting
+  would hold the ~60 fps loop for ~580 ms. The ring is now explicit: 32 periods
+  × 1024 frames = 32768 frames (~683 ms; HD-Audio caps periods at 32). That is
+  deeper than the worst one-tick burst, a wall hit plus the game-over sting at
+  31,440 frames. Measured: `sound_play` returns in 5–155 µs, re-prepare
+  included.
+- **No stale-ring tails.** `sound_open` sets sw params with
+  `silence_threshold = silence_size = buffer`, so the kernel keeps the ring
+  past the queued audio zeroed. Without that, after each cue the DMA plays up
+  to one period (21 ms) of whatever an earlier cue left in the ring before the
+  underrun is noticed. vani's `audio_set_sw_params` pins both silence fields to
+  0, so `sound_set_sw_silence` (polyomino's `audio_set_sw_silence`) issues the
+  ioctl on vani's handle with vani-core's own `AlsaSwParamsLayout`. On agnos it
+  is `#ifdef`'d to a no-op, as vani's own is, because the kernel owns the ring.
+- **Fail silent, never unconfigured.** `sound_open` checks HW_PARAMS and
+  PREPARE. A device that refuses the ring shape falls back to kernel-chosen
+  period / buffer: sound plays, but long cues can stall the loop and there is
+  no silence fill. A device that refuses the format, or the prepare, is closed
+  and `snd_dev` stays 0, so no write reaches an unconfigured PCM.
+
+### Changed
+- **Frames, not bytes.** `ms_samples` → `ms_frames`. `synth_tone` offsets and
+  lengths, `sfx_len` and `audio_write_wav`'s count are frames (4 bytes each),
+  the unit vani's `audio_write` takes. `sound_play` passes the cached frame
+  count to `audio_write` instead of a byte count to `audio_write_bytes`, and
+  now returns the frames queued (0 when muted, with no device, or refused).
+- **SFX cache 14.7 KB → 255 KB** (six heap buffers, 63,840 frames, built once
+  by `audio_init`). It is heap-allocated as before, so no stack buffer grows;
+  the largest new local is `sound_set_sw_silence`'s 136-byte sw-params struct.
+- **Pitches land closer to their design values.** The synth counts each
+  half-period in whole frames, which was coarse at 11025 Hz: the brick chirp
+  topped out at 1378 Hz against a designed 1150 Hz, and the fanfare's C5
+  measured 551 Hz against 523. At 48 kHz they measure 1171 Hz and 533 Hz.
+  Durations, sweep shapes and envelopes are unchanged.
+- **WAV dumps** (`audio_write_wav`, `programs/audio_demo.cyr`) are now 48 kHz
+  16-bit stereo, byte for byte the PCM the game sends the device. The file is
+  opened with `O_TRUNC`, so a shorter re-dump no longer leaves the old tail
+  behind.
+- `tests/cyrius-bb.tcyr` now includes `vendor/vani-core.cyr` + `src/sound.cyr`,
+  so the device shell's pure pieces are tested. `vendor/README.md` lists the
+  vani calls cyrius-bb makes, and
+  `docs/architecture/001-no-ffi-audio.md` describes the format, the stream
+  model and two console gotchas the probe surfaced (below).
+
+### Known issues (found while probing, not changed here)
+- **A busy card stalls start-up.** vani opens the PCM without `O_NONBLOCK`, so
+  while another client (PipeWire, another game) holds card 1, `sound_open`
+  waits for the card instead of failing. Measured: 2.7 s while a second
+  process held the card for 3 s. The fix belongs in vani's
+  `audio_open_playback`; the vendored file is not edited here.
+- **A silent mixer is not a silent fix.** A raw hw PCM bypasses PipeWire's
+  volume but not the codec's own amps. On the dev box, with only the login
+  greeter on the seat (so PipeWire had not taken the card), the ALC897's DAC
+  sat at −65 dB and both output pins were muted.
+
+### Verified
+- **Hardware probe** on card 1 (the ALC897), through the real `sound_open` /
+  `sound_play` with the SFX cache zeroed, so nothing was audible:
+  - The 0.8.3 call `audio_set_params(11025, 1, 8)` → `-22`;
+    `(48000, 2, 16)` → `0`. Left to pick, the kernel chose period 32 / buffer
+    1024.
+  - `sound_open` negotiated (read back from `/proc/asound`) 48000 / S16_LE / 2,
+    period 1024, buffer 32768, with start 1, stop 32768 and silence 32768 /
+    32768.
+  - All six cues queued in full, 800 ms apart. Each after the first started
+    from the XRUN state and went through the re-prepare path in 139–155 µs.
+  - Back-to-back bursts (wall + sting; wall + brick + fanfare) and ten brick
+    cues one frame apart never blocked: each cue after a burst's first queued
+    behind it in 5–9 µs. `sound_close` took 36 µs.
+- **Listening test**: _pending the console playtest._
+- `cyrius test tests/cyrius-bb.tcyr`: **253 / 253** (was 222). The audio group
+  went from 15 to 34 assertions (48 kHz values, S16_LE byte order, L == R,
+  amplitude bound, frame offsets, cue lengths). The new sound group adds 12:
+  ring sizing against the worst one-tick bursts, the retry policy, and the
+  no-device / muted no-op. Seven targeted mutations each fail the suite: an
+  inverted R channel, unsigned samples, byte-swapped samples, 11025 Hz, a
+  dropped `-ESTRPIPE` retry, a halved ring, and an ignored frame offset.
+- Headless smoke (60 / 600 / 3000 ticks): output and final-frame PPM
+  byte-identical to 0.8.3; audio is off the headless path.
+- `cyrius lint src/*.cyr`: 0 warnings on all 18 files. `cyrius fmt --check`:
+  clean across `src/`, `tests/` and `programs/`. `CYRIUS_DCE=1`: 999,864 →
+  999,928 B.
+
 ## [0.8.3] — 2026-09-26
 
 **Dependency-currency release: toolchain `6.6.2 → 6.6.6`, vani-core re-vendored

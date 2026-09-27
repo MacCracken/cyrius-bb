@@ -9,12 +9,16 @@ Third-party single-file snapshots that are **deliberately committed**
   (the `core` profile — the playback-only ALSA PCM shim: the `audio_*` API).
 - **Version**: 1.2.5, copied from the vani `1.2.5` tag (vani pins cyrius 6.6.2;
   we build on 6.6.6).
-- **Consumed by**: `src/sound.cyr` (via `audio_open_playback` /
-  `audio_set_params` / `audio_prepare` / `audio_write_bytes` / `audio_drain` /
-  `audio_close`). `include "vendor/vani-core.cyr"` sits before `src/sound.cyr`
-  in `src/main.cyr`'s chain; it needs only the `syscalls` + `string` + `alloc`
-  stdlib modules (vani's `dist/vani-core.deps` sidecar), all already in
-  `cyrius.cyml [deps].stdlib`.
+- **Consumed by**: `src/sound.cyr`, via `audio_open_playback`,
+  `audio_set_params_fmt` (explicit `SND_PCM_FORMAT_S16_LE`; vani ≥ 1.2.0),
+  `audio_prepare`, `audio_write`, `audio_drain` and `audio_close`. It also
+  uses `audio_fd` plus the `SNDRV_PCM_IOCTL_SW_PARAMS` / `AlsaSwParamsLayout`
+  constants for the silence-filled sw params (`sound_set_sw_silence`), because
+  vani's `audio_set_sw_params` pins the silence fields to 0. A refresh must
+  keep those names. `include "vendor/vani-core.cyr"` sits before
+  `src/sound.cyr` in `src/main.cyr`'s chain and in `tests/cyrius-bb.tcyr`. It
+  needs only the `syscalls` + `string` + `alloc` stdlib modules (vani's
+  `dist/vani-core.deps` sidecar), all already in `cyrius.cyml [deps].stdlib`.
 - **Why vendored instead of a `[deps.vani]` git dependency**: keeps the
   "bare stdlib / zero external deps" build lean — resolving vani as a git dep
   pulls its whole manifest tree (yukti, patra, sakshi) into `lib/`. The core

@@ -69,7 +69,7 @@ Shipped: parallax background (`render_bg` — depth zones + far/near vertical-ba
 
 **Carried forward** (not blocking):
 - **Slot-loaded music deferred** — `.ogg` needs an OGG decoder, infeasible without FFI/a decoder crate. If revisited it will be WAV. The SFX-focused acceptance does not depend on music.
-- **Audible playback** needs an OSS device (`padsp` shim on modern desktops) — build-verified only, like `/dev/fb0`. WAV dumps are the always-works verification path. SFX *feel* + a possible voice mixer want a console ear.
+- **Audible playback** needs an OSS device (`padsp` shim on modern desktops) — build-verified only, like `/dev/fb0`. WAV dumps are the always-works verification path. SFX *feel* + a possible voice mixer want a console ear. *(Since superseded: the sink moved to ALSA via vani-core at 0.8.0. A 2026-09-26 hardware probe found it had never played: the codec refused the 8-bit mono format. The unreleased fix renders 48 kHz S16 stereo and recovers the stream between cues. The console ear is still owed; see [note 001](../architecture/001-no-ffi-audio.md).)*
 
 ### M5 — High-score persistence (v0.6.0) — ✅ shipped 2026-05-26
 
@@ -99,7 +99,7 @@ First milestone to USE the shared crates (ADR 0003): sankoch + sigil wired from 
 
 199 headless assertions; DCE binary **460,384 B**. Detail in [`CHANGELOG.md`](../../CHANGELOG.md) `[0.7.0]`.
 
-**Carried forward** (the pre-v1.0 gate): full console playthrough of the flow + `/dev/fb0` scale/centre verification (the riskiest untested path) + audible `/dev/dsp` + feel tuning + camera-shake decision. See `state.md` Next.
+**Carried forward** (the pre-v1.0 gate): full console playthrough of the flow + `/dev/fb0` scale/centre verification (the riskiest untested path) + audible SFX (ALSA via vani-core since 0.8.0; originally `/dev/dsp`) + feel tuning + camera-shake decision. See `state.md` Next.
 
 ### Game-loop review backlog (target 0.7.2 — observed on first console playtest)
 

@@ -6,5 +6,5 @@ Not decisions (those live in [`../adr/`](../adr/)) and not guides. Items here de
 
 ## Items
 
-- [001 — no-FFI audio](001-no-ffi-audio.md): why audio is self-rolled square-wave PCM over OSS `/dev/dsp`, why there's no music, and the carried-forward console-playback caveat.
+- [001 — no-FFI audio](001-no-ffi-audio.md): why audio is self-rolled square-wave PCM played through vani's ALSA shim in the codec's own format (48 kHz S16 stereo), the XRUN-recovering stream model, why there's no music, and the console gotchas (the codec's mixer, a busy card).
 - [002 — save-deps binary size](002-save-deps-binary-size.md): why wiring sankoch + sigil at M5 ~4x'd the binary, and why DCE can't trim it.

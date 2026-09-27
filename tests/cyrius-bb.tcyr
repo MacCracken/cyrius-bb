@@ -20,6 +20,8 @@ include "src/fx.cyr"
 include "src/hud.cyr"
 include "src/input.cyr"
 include "src/audio.cyr"
+include "vendor/vani-core.cyr"   # the audio_* symbols src/sound.cyr calls
+include "src/sound.cyr"
 
 fn test_smoke() {
     test_group("smoke");
@@ -454,28 +456,73 @@ fn test_level_progress() {
     return 0;
 }
 
+# Signed S16 sample of channel ch (0 = L, 1 = R) in frame f of buf.
+fn t_s16(buf, f, ch): i64 {
+    var v = load16(buf + f * AUDIO_FRAME_BYTES + ch * 2);
+    if (v >= 32768) { v = v - 65536; }
+    return v;
+}
+
+# Frames in [0, n) whose L != R, or whose sample exceeds +/-amp.
+fn t_frame_faults(buf, n, amp): i64 {
+    var bad = 0;
+    var f = 0;
+    var s = 0;
+    while (f < n) {
+        s = t_s16(buf, f, 0);
+        if (s != t_s16(buf, f, 1)) { bad = bad + 1; }
+        else { if ((s > amp) || (s < (0 - amp))) { bad = bad + 1; } }
+        f = f + 1;
+    }
+    return bad;
+}
+
 fn test_audio() {
     test_group("audio");
     audio_init();
-    var buf = alloc(64);
-    # square wave at 441 Hz -> half-period = 11025/(2*441) = 12 samples, amp 50
-    synth_tone(buf, 0, 64, 441, 441, 50, 50);
-    assert_eq(load8(buf + 0), 178, "square hi = 128 + amp");
-    assert_eq(load8(buf + 11), 178, "still hi through first half-period");
-    assert_eq(load8(buf + 12), 78, "flips to lo = 128 - amp");
-    assert_eq(load8(buf + 23), 78, "still lo through second half-period");
-    assert_eq(load8(buf + 24), 178, "flips back to hi");
-    # amp 0 -> centre (silence) regardless of phase
-    synth_tone(buf, 0, 64, 441, 441, 0, 0);
-    assert_eq(load8(buf + 0), 128, "amp 0 -> centre");
-    assert_eq(load8(buf + 40), 128, "amp 0 -> centre later");
-    # amplitude envelope: first sample carries a0
-    synth_tone(buf, 0, 64, 441, 441, 80, 0);
-    assert_eq(load8(buf + 0), 208, "amp envelope starts at a0");
-    # SFX registry built
-    assert_eq(sfx_len(SFX_PADDLE) > 0, 1, "paddle SFX built");
-    assert_eq(sfx_buf(SFX_BRICK) != 0, 1, "brick SFX buffer allocated");
-    assert_eq(sfx_len(SFX_FANFARE), ms_samples(90) * 4, "fanfare = 4 segments");
+    # the device's own format: the probed codec rejects 11025 Hz 8-bit mono
+    assert_eq(AUDIO_RATE, 48000, "renders at 48 kHz");
+    assert_eq(AUDIO_FRAME_BYTES, AUDIO_CHANNELS * 2, "frame = channels x 16-bit");
+    assert_eq(ms_frames(1000), 48000, "1 s = AUDIO_RATE frames");
+    assert_eq(ms_frames(55), 2640, "55 ms frame count");
+    var buf = alloc(64 * AUDIO_FRAME_BYTES);
+    # square wave at 1000 Hz -> half-period = 48000/(2*1000) = 24 frames
+    synth_tone(buf, 0, 64, 1000, 1000, 10000, 10000);
+    assert_eq(t_s16(buf, 0, 0), 10000, "square hi = +amp");
+    assert_eq(t_s16(buf, 23, 0), 10000, "still hi through first half-period");
+    assert_eq(t_s16(buf, 24, 0), 0 - 10000, "flips to lo = -amp");
+    assert_eq(t_s16(buf, 47, 0), 0 - 10000, "still lo through second half-period");
+    assert_eq(t_s16(buf, 48, 0), 10000, "flips back to hi");
+    # S16_LE: -10000 = 0xD8F0, low byte first; right channel mirrors left
+    assert_eq(load8(buf + 24 * AUDIO_FRAME_BYTES), 240, "S16_LE low byte first");
+    assert_eq(load8(buf + 24 * AUDIO_FRAME_BYTES + 1), 216, "S16_LE high byte second");
+    assert_eq(t_s16(buf, 24, 1), 0 - 10000, "right channel = left");
+    assert_eq(t_frame_faults(buf, 64, 10000), 0, "every frame L == R, within +/-amp");
+    # amp 0 -> digital silence (0) regardless of phase
+    synth_tone(buf, 0, 64, 1000, 1000, 0, 0);
+    assert_eq(t_s16(buf, 0, 0), 0, "amp 0 -> silence");
+    assert_eq(t_s16(buf, 40, 1), 0, "amp 0 -> silence later");
+    # amplitude envelope: frame 0 carries a0; frame 24 (low half) is at
+    # a0 + (a1 - a0) * 24 / 64 = 20480 - 7680
+    synth_tone(buf, 0, 64, 1000, 1000, 20480, 0);
+    assert_eq(t_s16(buf, 0, 0), 20480, "amp envelope starts at a0");
+    assert_eq(t_s16(buf, 24, 0), 0 - 12800, "amp envelope decays linearly");
+    # off is a frame index: only frames [off, off+len) are written
+    assert_eq(synth_tone(buf, 32, 8, 1000, 1000, 0, 0), 8, "returns frames written");
+    assert_eq(t_s16(buf, 31, 0), 0 - 10560, "frame before off untouched");
+    assert_eq(t_s16(buf, 32, 0), 0, "tone lands at frame off");
+    assert_eq(t_s16(buf, 40, 0), 0 - 7680, "frame after off+len untouched");
+    # SFX cache: frame counts at 48 kHz
+    assert_eq(sfx_len(SFX_PADDLE), 1920, "paddle blip = 40 ms");
+    assert_eq(sfx_len(SFX_BRICK), 2640, "brick chirp = 55 ms");
+    assert_eq(sfx_len(SFX_WALL), 2640, "wall thud = 55 ms");
+    assert_eq(sfx_len(SFX_LOST), 10560, "ball-lost blip = 220 ms");
+    assert_eq(sfx_len(SFX_OVER), 28800, "game-over sting = 600 ms");
+    assert_eq(sfx_len(SFX_FANFARE), ms_frames(90) * 4, "fanfare = 4 segments");
+    # cues start as audible PCM, and stay L == R within their peak amplitude
+    assert_eq(t_s16(sfx_buf(SFX_PADDLE), 0, 0), 17920, "cue begins with a tone sample");
+    assert_eq(t_frame_faults(sfx_buf(SFX_OVER), sfx_len(SFX_OVER), 23040), 0, "sting frames L == R, within +/-amp");
+    assert_eq(t_frame_faults(sfx_buf(SFX_FANFARE), sfx_len(SFX_FANFARE), 19200), 0, "fanfare frames L == R, within +/-amp");
     # mute toggle
     audio_set_mute(0);
     assert_eq(audio_muted(), 0, "starts unmuted");
@@ -483,6 +530,33 @@ fn test_audio() {
     assert_eq(audio_muted(), 1, "muted");
     audio_toggle_mute();
     assert_eq(audio_muted(), 0, "toggle -> unmuted");
+    return 0;
+}
+
+# The device shell's pure pieces (src/sound.cyr). No /dev/snd in CI, so
+# snd_dev stays 0: sound_open is never called here.
+fn test_sound() {
+    test_group("sound");
+    # ring shape: whole periods, within HD-Audio's 32-period cap
+    assert_eq(SND_BUFFER_FRAMES % SND_PERIOD_FRAMES, 0, "ring is whole periods");
+    assert_eq(SND_BUFFER_FRAMES / SND_PERIOD_FRAMES <= 32, 1, "<= 32 periods (HD-Audio cap)");
+    # the ring holds a whole tick's cues, so a write to an idle ring never
+    # blocks: a loss can share its tick with a wall hit, a level clear with a
+    # wall hit and its last brick (world_step)
+    assert_eq(sfx_len(SFX_WALL) + sfx_len(SFX_OVER) <= SND_BUFFER_FRAMES, 1, "wall + game-over sting fits the ring");
+    assert_eq(sfx_len(SFX_WALL) + sfx_len(SFX_BRICK) + sfx_len(SFX_FANFARE) <= SND_BUFFER_FRAMES, 1, "wall + brick + fanfare fits the ring");
+    # write-failure policy: only XRUN / suspend are worth a PREPARE + retry
+    assert_eq(sound_write_recoverable(0 - 32), 1, "-EPIPE (ring ran dry) re-prepares");
+    assert_eq(sound_write_recoverable(0 - 86), 1, "-ESTRPIPE (suspended) re-prepares");
+    assert_eq(sound_write_recoverable(1920), 0, "a landed write needs no recovery");
+    assert_eq(sound_write_recoverable(0 - 19), 0, "-ENODEV (unplugged) is not retried");
+    assert_eq(sound_write_recoverable(0 - 77), 0, "-EBADFD is not retried");
+    assert_eq(sound_write_recoverable(0 - 1), 0, "vani's -1 (bad handle / args) is not retried");
+    # no device: play is a silent no-op, muted or not
+    assert_eq(sound_play(SFX_BRICK), 0, "no-device play is a no-op");
+    audio_set_mute(1);
+    assert_eq(sound_play(SFX_BRICK), 0, "muted play is a no-op");
+    audio_set_mute(0);
     return 0;
 }
 
@@ -568,6 +642,7 @@ fn main() {
     test_bg();
     test_fx();
     test_audio();
+    test_sound();
     test_scores();
     return assert_summary();
 }

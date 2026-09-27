@@ -1,12 +1,13 @@
 # audio_demo.cyr — synthesise every SFX and dump it to a WAV file.
 #
 # Build: cyrius build programs/audio_demo.cyr build/audio_demo
-# Run:   ./build/audio_demo   (writes build/sfx_*.wav)
+# Run:   ./build/audio_demo   (writes build/sfx_*.wav — 48 kHz 16-bit stereo,
+#        the exact PCM the game sends the device)
 # Hear:  any audio player, e.g. `ffplay build/sfx_brick.wav`.
 #
 # The ear-equivalent of demo.cyr's eyeball frames: lets the SFX be heard /
-# verified without a /dev/dsp device. See ADR 0003 +
-# docs/architecture/004-no-ffi-audio.md.
+# verified without the game's device path. See ADR 0003 +
+# docs/architecture/001-no-ffi-audio.md.
 
 include "src/audio.cyr"
 
