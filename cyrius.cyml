@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "6.7.9"
+cyrius = "6.7.18"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
@@ -21,12 +21,12 @@ cyrius = "6.7.9"
 #
 # Dep chain:
 #   mabda     — GPU rendering (2.5D sprite + depth composition)              [available]
-#   hisab     — vector / transform math                                      [Cyrius, no dist bundle at tag 2.2.0 yet]
+#   hisab     — vector / transform math                                      [Cyrius, dist bundle at 3.4.1; not wired]
 #   sankoch   — save-file / high-score compression                           [available]
 #   sigil     — high-score integrity hash                                    [available]
 #   kiran     — game engine (ECS, scene hierarchy, input)                    [Rust → port pending]
 #   impetus   — physics (ball bounce, paddle collision, brick destruction)   [Rust → port pending]
-#   shravan   — audio (sound effects, level music)                           [Cyrius v4.10.3, needs bump + dist bundle]
+#   shravan   — audio (sound effects, level music)                           [Cyrius, dist bundle at 2.9.3; not wired]
 #
 # Original-assets policy: per ADR 0002, all art and sound are new work,
 # public-domain reference material, or commissioned with clear license.
@@ -90,7 +90,7 @@ stdlib = [
 # path. Kept here (commented) so the wiring is one uncomment away.
 # [deps.mabda]
 # git = "https://github.com/MacCracken/mabda.git"
-# tag = "2.5.0"
+# tag = "4.2.0"
 # modules = ["dist/mabda.cyr"]
 
 # sankoch (compression) + sigil (integrity hash) are the M5 high-score
@@ -99,30 +99,29 @@ stdlib = [
 # consumed via the [deps].stdlib list above (resolves from the pinned lib,
 # no network) rather than these git blocks. The git-source coordinates are
 # kept here for reference — switch to them if a future toolchain drops the
-# bundled copies. Tags track what the pinned 6.7.9 snapshot folds: sankoch
-# 2.8.3, sigil 3.13.11. The snapshot copy wins over a same-named [deps.*]
+# bundled copies. Tags track what the pinned 6.7.18 snapshot folds: sankoch
+# 2.8.9, sigil 3.13.15. The snapshot copy wins over a same-named [deps.*]
 # block, so switching means dropping the name from [deps].stdlib too.
 # [deps.sankoch]
 # git = "https://github.com/MacCracken/sankoch.git"
-# tag = "2.8.3"
+# tag = "2.8.9"
 # modules = ["dist/sankoch.cyr"]
 #
 # [deps.sigil]
 # git = "https://github.com/MacCracken/sigil.git"
-# tag = "3.13.11"
+# tag = "3.13.15"
 # modules = ["dist/sigil.cyr"]
 
-# ── Pending deps: not yet wireable ───────────────────────────────────
+# ── Pending deps: not wired ──────────────────────────────────────────
 # kiran and impetus are Rust today; they need porting to Cyrius before
-# they can be consumed here. shravan is already Cyrius but pinned to
-# v4.10.3 and lacks a dist/shravan.cyr bundle — it needs a toolchain
-# bump and a bundle.sh pass.
+# they can be consumed here. hisab and shravan do ship dist/ bundles now
+# (tags below), but cyrius-bb self-rolls that math and audio per ADR 0003.
 #
-# Uncomment each block when its upstream ships a tag with dist/<name>.cyr.
+# Uncomment a block only once a decision to wire that dep has been made.
 #
 # [deps.hisab]
 # git = "https://github.com/MacCracken/hisab.git"
-# tag = "2.2.0"
+# tag = "3.4.1"
 # modules = ["dist/hisab.cyr"]
 #
 # [deps.kiran]
@@ -137,5 +136,5 @@ stdlib = [
 #
 # [deps.shravan]
 # git = "https://github.com/MacCracken/shravan.git"
-# tag = "TBD"
+# tag = "2.9.3"
 # modules = ["dist/shravan.cyr"]

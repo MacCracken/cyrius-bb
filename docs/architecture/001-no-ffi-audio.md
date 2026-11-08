@@ -20,6 +20,8 @@ cyrius-bb has two hard rules that together box in how audio works:
 - **shravan is not consumable.** The intended audio crate is pinned at
   v4.10.3 with no `dist/shravan.cyr` bundle (see `cyrius.cyml` pending-deps);
   it needs an upstream toolchain bump + bundle before it can be wired.
+  (True when this note was written. shravan has since shipped a bundle, at
+  2.9.3 as of 0.9.1; the synth stays self-rolled per ADR 0003.)
 
 So, exactly as the renderer was self-rolled rather than waiting on mabda
 ([ADR 0003](../adr/0003-self-rolled-primitives.md)), audio is self-rolled

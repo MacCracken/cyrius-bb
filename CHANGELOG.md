@@ -4,6 +4,70 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-11-08
+
+**Dependency-currency release: toolchain `6.7.9 → 6.7.18`, with every library on
+its latest tag.** No gameplay, render, audio-synth or save-format change, and no
+edits under `src/`, `tests/` or `programs/`. The headless smoke, every demo
+artifact and the high-score file are byte-identical to 0.9.0's. 253 assertions
+green; lint + fmt clean. The binary grows 13.5%, nearly all of it bayan's.
+
+### Changed
+- **Cyrius pin `6.7.9` → `6.7.18`** (`cyrius.cyml [package].cyrius`). `lib/`
+  re-vendored with `cyrius deps`. All 62 modules are byte-identical to the 6.7.18
+  snapshot, and a resolve from an empty `lib/` gives the same file set and
+  `cyrius.lock`. Eight are new: `lib/math.cyr` and the seven files under
+  `lib/unicode/`, which bayan 1.11 requires. `[deps].stdlib` is unchanged. The
+  snapshot's folded crates move with it: **sankoch 2.8.3 → 2.8.9**, **sigil
+  3.13.11 → 3.13.15**, **bayan 1.5.13 → 1.11.1**. Each is also the latest tag
+  upstream (checked against GitHub), so the bundled and latest versions are the
+  same set.
+- **vani-core stays at 1.2.10** (`vendor/vani-core.cyr`, unchanged). It is byte-
+  identical to the latest vani tag, and 1.2.10 is the release 6.7.18 folds.
+- **The 6.7.10–6.7.18 compiler changes need no source edits.** Their new
+  refusals (generics, struct values, typed pointers) don't fire on this code.
+- `cyrius.cyml`: the commented `[deps.sankoch]` / `[deps.sigil]` fallback tags
+  now match the snapshot (2.8.9 / 3.13.15), and the commented `mabda`, `hisab`
+  and `shravan` blocks name their latest tags (4.2.0 / 3.4.1 / 2.9.3). hisab and
+  shravan now ship `dist/` bundles, so the notes saying they had none are
+  corrected. All three stay commented out, per ADR 0003.
+- **DCE binary: 1,019,000 B → 1,156,752 B (+137,752 B, +13.5%).** Staged builds
+  on a scratch copy of the toolchain attribute it, applied in this order:
+  - The 6.7.18 compiler alone: **−12,288 B**.
+  - sankoch 2.8.9: **+67,040 B**.
+  - sigil 3.13.15: **−264,872 B**. Its 262,144 B static crypto bank is gone,
+    replaced by a lane pool.
+  - **bayan 1.11.1: +348,296 B.** Only 22 of its 1,118 functions (the u256
+    helpers) survive DCE, and `.rodata` grew 342,250 B, so the cost is static
+    data that function-level DCE cannot drop, most likely the Unicode tables
+    bayan 1.11 newly requires.
+  - The rest of the stdlib: **−424 B**.
+
+  Plain build: 2,186,360 → 2,578,064 B. The static-data advisory moved 394,464 →
+  153,096 B.
+- **The sigil frame-budget warning is gone**, with that static bank. The build's
+  only warning is now the static-data advisory.
+
+### Verified
+- `cyrius test tests/cyrius-bb.tcyr`: **253 / 253**. `cyrius deps --verify`: 62
+  verified, 0 failed. `cyrius lint src/*.cyr`: 0 warnings on all 18 files.
+  `cyrius fmt --check`: clean.
+- `programs/{demo,audio_demo,scores_demo}.cyr` and the bench / fuzz entry points
+  build. All 11 artifacts the demos write are byte-identical to a 6.7.9 build of
+  the same source, and so is the `<frames>` headless smoke (60 / 600 / 3000
+  ticks: stdout and final-frame PPM).
+- **Save-file compatibility, both directions.** 6.7.9 and 6.7.18 builds write
+  byte-identical `scores.cyb` files and each loads the other's intact. A file
+  written by a 6.6.6 build loads too, and a tampered file is still rejected
+  (`-2`, HMAC mismatch).
+- `CYRIUS_DCE=1`: 1,156,752 B, and a clean copy of the tree builds a
+  byte-identical binary.
+- The 6.7.18 release tarball is published, so CI's pin-read install step
+  resolves.
+- **Not checked on hardware.** The account that ran the bump still has no access
+  to `pcmC1D0p` (`-EACCES`, with the seat ACL held by the login greeter). The
+  console playtest and listening test remain open.
+
 ## [0.9.0] — 2026-11-08
 
 **Dependency-currency release: toolchain `6.6.20 → 6.7.9`, vani-core re-vendored

@@ -7,9 +7,9 @@ Third-party single-file snapshots that are **deliberately committed**
 
 - **Source**: [vani](https://github.com/MacCracken/vani) `dist/vani-core.cyr`
   (the `core` profile — the playback-only ALSA PCM shim: the `audio_*` API).
-- **Version**: 1.2.10, copied from the vani `1.2.10` tag, the release the 6.7.9
-  toolchain folds as `lib/vani.cyr` (vani pins cyrius 6.7.5; we build on
-  6.7.9).
+- **Version**: 1.2.10, copied from the vani `1.2.10` tag, the latest release
+  and the one the 6.7.18 toolchain folds as `lib/vani.cyr` (vani pins cyrius
+  6.7.5; we build on 6.7.18).
 - **Consumed by**: `src/sound.cyr`, via `audio_open_playback`,
   `audio_set_params_fmt` (explicit `SND_PCM_FORMAT_S16_LE`; vani ≥ 1.2.0),
   `audio_prepare`, `audio_write`, `audio_drain` and `audio_close`. It also
