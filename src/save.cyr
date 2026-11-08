@@ -3,9 +3,9 @@
 # Top-10 scores with 3-letter initials, persisted to
 # ~/.cyrius-bb/scores.cyb. Unlike the renderer / audio (self-rolled),
 # scoring USES the shared crates per ADR 0003 — sankoch for compression,
-# sigil for the integrity hash; we don't self-roll zip/crypto. Both are
-# bundled in the 6.0.1 toolchain snapshot (added to cyrius.cyml [deps]
-# stdlib), so consuming them needs no network.
+# sigil for the integrity hash; we don't self-roll zip/crypto. Both come
+# from the pinned toolchain snapshot (cyrius.cyml [deps] stdlib), so
+# consuming them needs no network.
 #
 # File layout (.cyb):
 #   [0]   "CYBB"                 magic (4 bytes)
@@ -31,9 +31,32 @@ enum Score {
     TB_COUNT = 0;    # entries in use (0..HS_MAX)
     TB_ENTRIES = 8;  # inline entry array
     TB_BYTES = 168;  # 8 + HS_MAX * SC_BYTES
+    INITIALS_DONE = 4; # initials_apply: Enter was pressed
 }
 
 fn save_key(): i64 { return "cyrius-bb-scores-v1"; }
+
+# Apply one key at the initials prompt to the 3-byte `ini`, cursor at `pos`
+# (0..3). A-Z / a-z fill the next slot (folded to upper case), Backspace /
+# DEL step back, Enter finishes. Every other key is ignored, arrows and Esc
+# included. Returns the new cursor, or INITIALS_DONE. Pure; unit-tested.
+fn initials_apply(ini, pos, key): i64 {
+    if (key == 10) { return INITIALS_DONE; }
+    if (key == 13) { return INITIALS_DONE; }
+    if (key == 127 || key == 8) {
+        if (pos > 0) { return pos - 1; }
+        return pos;
+    }
+    var up = key;
+    if (up >= 97) {
+        if (up <= 122) { up = up - 32; }
+    }
+    if (up < 65) { return pos; }
+    if (up > 90) { return pos; }
+    if (pos >= 3) { return pos; }
+    store8(ini + pos, up);
+    return pos + 1;
+}
 
 fn hs_new(): i64 {
     var t = alloc(TB_BYTES);
@@ -203,6 +226,18 @@ fn save_path_for(tail): i64 {
 fn hs_dir(): i64 { return save_path_for("/.cyrius-bb"); }
 fn hs_path(): i64 { return save_path_for("/.cyrius-bb/scores.cyb"); }
 
+# Write the table to `path` atomically, so a failed or interrupted save
+# leaves the previous file intact. Returns bytes written, or negative on
+# error.
+fn hs_save_to(t, path): i64 {
+    var buf[256];
+    var n = hs_encode(t, &buf, 256);
+    if (n < 0) { return n; }
+    var w = file_write_atomic(path, &buf, n);
+    if (w < 0) { return w; }
+    return n;
+}
+
 # Persist the table. Best-effort mkdir of ~/.cyrius-bb (ignores EEXIST).
 # Returns bytes written, or negative on error.
 fn hs_save(t): i64 {
@@ -210,10 +245,7 @@ fn hs_save(t): i64 {
     if (dir != 0) { syscall(83, dir, 493); } # mkdir 0755
     var path = hs_path();
     if (path == 0) { return 0 - 1; }
-    var buf[256];
-    var n = hs_encode(t, &buf, 256);
-    if (n < 0) { return n; }
-    return file_write_all(path, &buf, n);
+    return hs_save_to(t, path);
 }
 
 # Load the table. Returns 0 ok; 1 if there is no file yet (first run —

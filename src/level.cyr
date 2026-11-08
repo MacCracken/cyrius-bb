@@ -139,7 +139,7 @@ fn level_make_bricks(idx, area_w): i64 {
 # the difficulty curve turns: the paddle bounce re-asserts |v| to it every
 # hit (world.cyr), so the ball holds exactly this speed within a level and
 # steps up between levels. Gentle ramp — 5.0, 5.5, 6.0, 6.5, 7.0 — kept so
-# the steepest rebound's vertical component (speed * 0.94) stays < brick
+# the fastest vertical travel (a centre rebound, vy = speed) stays < brick
 # height (8) and the ball can't tunnel a row. 5.0 at L1 is deliberately
 # easy: the old curve let edge hits add speed, so L1 ran fast and was hard
 # to clear (roadmap game-loop bug #2); a conserved 5.0 is controllable.

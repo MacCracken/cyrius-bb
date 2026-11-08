@@ -24,6 +24,21 @@ fn aabb_overlap(ax, ay, aw, ah, bx, by, bw, bh): i64 {
 # top/bottom hit).
 fn reflect(v): i64 { return (0 - v); }
 
+# Which face of a rect a moving ball struck: 1 = a side (flip vx), 0 = top
+# or bottom (flip vy). Each axis's depth along the ball's travel, divided by
+# its speed, is how long ago the ball crossed that axis's edge; the axis
+# crossed most recently is the face it hit. Compared cross-multiplied to
+# avoid dividing, and a tie (or vx == 0) counts as top/bottom. The ball is
+# the box (bx, by, d, d) after this tick's move; all args 16.16 fixed.
+fn hit_is_side(bx, by, d, vx, vy, rx, ry, rw, rh): i64 {
+    var dx = rx + rw - bx;
+    if (vx > 0) { dx = bx + d - rx; }
+    var dy = ry + rh - by;
+    if (vy > 0) { dy = by + d - ry; }
+    if (dx * fixed_abs(vy) < dy * fixed_abs(vx)) { return 1; }
+    return 0;
+}
+
 # Paddle english. Given the ball's centre x, the paddle's centre x, and
 # the paddle's half-width (all 16.16 fixed), return the normalised hit
 # offset, clamped to [-FIXED_ONE, +FIXED_ONE]:

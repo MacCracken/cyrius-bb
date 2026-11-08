@@ -4,6 +4,91 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-11-08
+
+**Code audit sweep and repair.** All first-party code read twice, by independent
+readers, and every suspect reproduced before it was changed: no CRITICAL or HIGH
+findings, 3 MEDIUM and 12 LOW, all fixed. The full report is
+[`docs/audit/2026-11-08-audit.md`](docs/audit/2026-11-08-audit.md). One repair
+changes how the game plays (see **Feel**) and needs the console playtest.
+
+### Fixed
+- **Arrow keys could quit the game.** An escape sequence split across reads was
+  taken for a lone Esc. Eleven queued arrows (33 bytes against a 32-byte read)
+  did it, as did application-mode arrows, and from the menu it exited the
+  program. One decoder, `input_feed`, now keeps its position between reads and
+  serves gameplay, the menu and the initials prompt. A lone Esc registers one
+  poll later.
+- **Held keys spoiled the post-game screens.** A movement key still held at game
+  over typed `DDD` into the initials and dismissed the score table at once, and
+  arrows typed letters at the prompt. Those screens now ignore input until it has
+  been quiet for 30 frames (`INPUT_SETTLE_FRAMES`), and the prompt reads decoded
+  keys (`initials_apply`).
+- **A failed save destroyed the high scores.** `hs_save` truncated before writing:
+  under `ulimit -f 0` a valid file became 0 bytes. It now writes atomically
+  (`hs_save_to`, `file_write_atomic`), and the table shows `NOT SAVED` on failure.
+- **Non-terminal stdin hung the game.** With stdin at EOF the menu spun forever,
+  and on an idle pipe every read blocked. `input_init` now checks `TCGETS` /
+  `TCSETS`, and the game prints a message and exits 1 before opening any device.
+- **Ctrl-C did nothing.** `ISIG` is off, so it arrives as byte 3. It now quits.
+- **Framebuffer geometry.** Blits ignored the console's pan offset and accepted
+  any mode. A mode smaller than the surface produced refused `lseek`s and writes
+  at stale offsets, and a non-32-bpp mode drew garbage. Offsets now include
+  `xoffset` / `yoffset`, unusable modes are refused, and when there is no picture
+  the game says so on stderr.
+- `fb_get` is bounds-checked. `fb_write_ppm` truncates, so a shorter dump no
+  longer keeps the old file's tail.
+- **CI could not catch two things.** `cyrius lint` exits 0 on warnings, so the
+  lint step now uses `--exit-with-count`. Emptying `cyrius.lock` passed because
+  `cyrius deps` regenerated it, so the job now runs `cyrius deps --locked`.
+
+### Feel
+- **Brick side hits now flip `vx`, not `vy`** (`hit_is_side`, `brick_side_open`),
+  closing the open roadmap item. Top and bottom hits are unchanged, and a ball
+  under the seam of two bricks still bounces vertically. **Levels take longer to
+  clear:** across 200 bot games, mean ticks went from 5,575 to 7,405 and the worst
+  from 8,331 to 10,264, because a ball striking a side now bounces back instead of
+  carrying on through the row. Every game still cleared and speed stayed constant.
+  Needs the console playtest. To revert, take the `side == 1` branch out of
+  `world_step`.
+- **Reversing direction no longer stalls the paddle.** The old direction's latch
+  cancelled the new one for up to 5 frames (`input_hold_dir`).
+
+### Changed
+- **`tests/cyrius-bb.fcyr` is a real fuzz harness** over `hs_decode` (garbage,
+  mutated and truncated files, hostile plaintext behind a valid HMAC) and the
+  input decoder (results must not depend on where reads split). It runs in CI as
+  `cyrius fuzz`.
+- **Tests: 253 → 382 assertions.** New groups cover the input decoder, settle and
+  hold, initials, side hits, framebuffer geometry and the save file. Three old
+  tests that could not fail or claimed too much now do their job (`fb_set` bounds,
+  mute with a device open, the tunnelling invariant).
+- Comments corrected where they contradicted the code: the tunnelling figure is
+  `speed * 1.0`, not 0.94; `world`'s field count; stale toolchain and shravan
+  notes. `input_read_byte` is replaced by `input_read_key`.
+- **DCE binary: 1,156,752 B → 1,165,272 B (+8,520 B, +0.74%).** Plain build:
+  2,578,064 → 2,586,584 B. The static-data advisory moved 153,096 → 153,232 B.
+
+### Verified
+- `cyrius test tests/cyrius-bb.tcyr`: **382 / 382**, also under `--bounds`,
+  `CYRIUS_POISON=1` and aarch64 (qemu). `cyrius lint --strict` and `fmt --check`
+  clean; `vet` and `deny` clean.
+- `cyrius fuzz`: 8,000 save and 30,000 input cases, clean plain, `--poison` and
+  `--bounds`.
+- **33 / 33 mutations turn a check red** (31 suite, 2 fuzz). `file_write_atomic`
+  is verified out of band: under a failing write the old file survives at 0.9.2
+  and is lost at 0.9.1.
+- **Real terminal path.** Ten pty scenarios replay the findings, each restoring
+  termios. A full game (menu, play, pause, mute, game over, initials, save, table,
+  quit) ran in a pty and exited 0 with the terminal restored.
+- All 11 demo artifacts and `scores.cyb` are byte-identical to 0.9.1. Saves load
+  in both directions, 6.6.6-era saves load, and tampered files are rejected.
+  Headless smoke output matches; the frame after 600+ ticks differs as expected
+  from the side-hit fix. Headless frames are identical across x86_64 and aarch64.
+- **Not verified:** the framebuffer blit on a real console (the harnesses avoid
+  `/dev/fb0` on purpose), audio on hardware (`-EACCES` on `pcmC1D0p`), and feel.
+  All stay with the console playtest.
+
 ## [0.9.1] — 2026-11-08
 
 **Dependency-currency release: toolchain `6.7.9 → 6.7.18`, with every library on

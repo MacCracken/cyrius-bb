@@ -7,12 +7,12 @@
 # Requires (include order): fixed.cyr, geom.cyr, ball.cyr, paddle.cyr,
 # bricks.cyr — then this file.
 #
-# Heap struct, 11 x i64: ball, paddle, bricks, width, height, score,
+# Heap struct, 12 x i64: ball, paddle, bricks, width, height, score,
 # lives, state, speed (the level's target ball speed — a paddle bounce
 # re-asserts |v| to this, so english sets angle not speed; see geom.cyr
 # paddle_rebound), last_hit (brick idx destroyed this tick, -1 if none) +
-# last_tier (its tier). last_hit/last_tier are a visual-effects hook
-# (M3): the render loop reads them to spawn debris at the right spot +
+# last_tier (its tier), events. last_hit/last_tier are a visual-effects
+# hook (M3): the render loop reads them to spawn debris at the right spot +
 # colour. They do not affect the deterministic sim.
 
 enum WorldState {
@@ -181,8 +181,17 @@ fn world_step(wd): i64 {
     store64(wd + WO_LAST_HIT, hit);
     store64(wd + WO_LAST_TIER, brick_tier(g, hit)); # capture before destroy
     world_add_event(wd, EV_BRICK);
+    # a struck side flips vx, a struck top/bottom flips vy
+    var side = 0;
+    if (hit_is_side(bl, bt, d, ball_vx(b), ball_vy(b), brick_x(g, hit), brick_y(g, hit), brw, brh) == 1) {
+        side = brick_side_open(g, hit, ball_vx(b));
+    }
     store64(wd + WO_SCORE, world_score(wd) + brick_destroy(g, hit));
-    ball_set_vy(b, reflect(ball_vy(b)));
+    if (side == 1) {
+        ball_set_vx(b, reflect(ball_vx(b)));
+    } else {
+        ball_set_vy(b, reflect(ball_vy(b)));
+    }
     if (bricks_alive_count(g) == 0) {
         store64(wd + WO_STATE, WS_LEVEL_CLEAR);
     }

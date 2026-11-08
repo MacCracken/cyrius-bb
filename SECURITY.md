@@ -74,15 +74,14 @@ same rubric the internal audits use.
 
 ## Audit History
 
-No security audit has run yet — cyrius-bb is at scaffold stage (v0.1.0, no
-gameplay code). A **P(-1) hardening pass** runs before the first feature minor
-and before the v1.0 freeze, per [`CLAUDE.md`](CLAUDE.md) and the
+A **P(-1) hardening pass** runs before each feature minor and before the v1.0
+freeze, per the
 [first-party standards](https://github.com/MacCracken/agnosticos/blob/main/docs/development/first-party/first-party-standards.md#security-hardening-new--required-before-every-release).
-Findings will be filed as `docs/audit/YYYY-MM-DD-audit.md`.
+Findings are filed as `docs/audit/YYYY-MM-DD-audit.md`.
 
 | Date | Release | Findings | Report |
 |------|---------|----------|--------|
-| —    | —       | none yet | —      |
+| 2026-11-08 | 0.9.2 | 3 MEDIUM, 12 LOW (all fixed) | [`docs/audit/2026-11-08-audit.md`](docs/audit/2026-11-08-audit.md) |
 
 ## Disclosure
 

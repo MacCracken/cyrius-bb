@@ -1,9 +1,8 @@
 # audio.cyr — era-spirit SFX synthesis. See ADR 0003.
 #
-# Self-rolled, like the renderer: shravan has no consumable dist bundle
-# (cyrius.cyml pending-deps), so cyrius-bb synthesises its own square-wave
-# SFX on bare stdlib — faithful to Breakout's 1976 square-beep palette
-# anyway. See docs/architecture/001-no-ffi-audio.md.
+# Self-rolled, like the renderer (ADR 0003): cyrius-bb synthesises its own
+# square-wave SFX on bare stdlib — faithful to Breakout's 1976 square-beep
+# palette anyway. See docs/architecture/001-no-ffi-audio.md.
 #
 # This module is the *tested* core (no device I/O — sample-assertable,
 # CI-friendly), mirroring framebuf.cyr. The best-effort ALSA sink is the

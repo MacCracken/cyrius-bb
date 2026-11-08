@@ -1,13 +1,13 @@
 # input.cyr — keyboard input via Linux terminal raw mode. See ADR 0003.
 #
 # Non-canonical, non-blocking stdin (termios via ioctl, VMIN=0/VTIME=0).
-# `input_poll()` reads the bytes available this frame and returns a
-# bitmask of game actions. `bb_key_action()` is the pure single-byte
-# decoder (unit-tested); arrow-key escape sequences (ESC [ C / ESC [ D)
-# are decoded in the poll loop. Pattern mirrors cyrius-doom/src/input.cyr.
-#
-# The raw-tty I/O is not unit-tested (CI has no controlling terminal) —
-# only the pure decoder is. Requires the `memcpy` from stdlib.
+# Every reader (gameplay, menu, initials) decodes through input_feed, one
+# byte at a time with its state kept between reads, so a key means the same
+# thing on every screen and an escape sequence survives being split across
+# reads. The decoder and the action / nav mappings are unit-tested; only the
+# thin read() wrappers need a controlling terminal, which CI does not have.
+# Pattern mirrors cyrius-doom/src/input.cyr. Requires the `memcpy` from
+# stdlib.
 
 enum InputAction {
     ACT_LEFT = 1;
@@ -26,6 +26,27 @@ enum NavAction {
     NAV_BACK = 4;
 }
 
+# What input_feed yields. A plain byte decodes to itself, so a lone ESC is
+# 27; arrows sit above the byte range. KEY_NONE: this byte finished no key.
+enum KeyCode {
+    KEY_NONE = 0;
+    KEY_ESC = 27;
+    KEY_UP = 256;
+    KEY_DOWN = 257;
+    KEY_RIGHT = 258;
+    KEY_LEFT = 259;
+}
+
+# Where the decoder is inside an escape sequence.
+enum EscState {
+    ESC_IDLE = 0;     # no sequence open
+    ESC_START = 1;    # saw ESC
+    ESC_CSI = 2;      # saw ESC [
+    ESC_CSI_ARGS = 3; # inside a CSI's parameters (ESC [ 1 ; 5 C)
+    ESC_SS3 = 4;      # saw ESC O (application-mode cursor keys)
+    ESC_FKEY = 5;     # saw ESC [ [ (Linux console F1-F5)
+}
+
 enum TermConst {
     TCGETS = 0x5401;
     TCSETS = 0x5402;
@@ -40,6 +61,15 @@ enum PaddleInput {
     # Tune: > the steady-state repeat gap (~2-3 frames) to glide smoothly,
     # small enough that post-release drift stays tight. Playtest knob.
     PADDLE_HOLD_FRAMES = 6;
+    # Quiet frames before a post-game screen takes input. A movement key
+    # still held when the last ball drops keeps repeating into the initials
+    # prompt and the score table. 30 frames (~0.5 s) outlasts both a repeat
+    # gap and the initial repeat delay (250-500 ms).
+    INPUT_SETTLE_FRAMES = 30;
+}
+
+enum InputRead {
+    INPUT_READ_BYTES = 32; # bytes one poll reads; the rest wait for the next
 }
 
 # Decaying key-held latch. Re-arm to PADDLE_HOLD_FRAMES on a frame a
@@ -53,24 +83,172 @@ fn input_hold_step(latch, armed): i64 {
     return 0;
 }
 
+# One direction's latch for this frame. A tty repeats only the last key
+# pressed, so a byte for the opposite direction means this one was let go:
+# drop it at once rather than leave two latches cancelling for up to
+# PADDLE_HOLD_FRAMES. Pure; unit-tested.
+fn input_hold_dir(latch, armed, opposite): i64 {
+    if (armed == 0) {
+        if (opposite != 0) { return 0; }
+    }
+    return input_hold_step(latch, armed);
+}
+
+# Count quiet frames: `key` is input_read_key's result (-1 = nothing came).
+# Pure; unit-tested.
+fn input_settle_step(quiet, key): i64 {
+    if (key >= 0) { return 0; }
+    if (quiet < INPUT_SETTLE_FRAMES) { return quiet + 1; }
+    return quiet;
+}
+
+# Whether input has been quiet long enough for a new screen to take it.
+fn input_settled(quiet): i64 {
+    if (quiet >= INPUT_SETTLE_FRAMES) { return 1; }
+    return 0;
+}
+
 var orig_termios[64];
 var raw_active = 0;
+var input_esc = ESC_IDLE; # the decoder's position, kept between reads
 
-# Single-byte key -> action bit. Pure; unit-tested.
+# Key -> action bit. Pure; unit-tested.
 fn bb_key_action(ch): i64 {
-    if (ch == 97) { return ACT_LEFT; }     # 'a'
+    if (ch == 97) { return ACT_LEFT; }      # 'a'
+    if (ch == KEY_LEFT) { return ACT_LEFT; }
     if (ch == 100) { return ACT_RIGHT; }    # 'd'
+    if (ch == KEY_RIGHT) { return ACT_RIGHT; }
     if (ch == 32) { return ACT_LAUNCH; }    # space
     if (ch == 113) { return ACT_QUIT; }     # 'q'
-    if (ch == 27) { return ACT_QUIT; }      # lone ESC
+    if (ch == KEY_ESC) { return ACT_QUIT; } # lone ESC
+    if (ch == 3) { return ACT_QUIT; }       # Ctrl-C (ISIG is off: it's a byte)
     if (ch == 109) { return ACT_MUTE; }     # 'm'
     if (ch == 112) { return ACT_PAUSE; }    # 'p'
     return 0;
 }
 
+# Key -> menu action. w/k/up -> UP, s/j/down -> DOWN, enter/space -> SELECT,
+# q/ESC/Ctrl-C -> BACK. Pure; unit-tested.
+fn input_nav_key(k): i64 {
+    if (k == KEY_UP) { return NAV_UP; }
+    if (k == 119) { return NAV_UP; }      # 'w'
+    if (k == 107) { return NAV_UP; }      # 'k'
+    if (k == KEY_DOWN) { return NAV_DOWN; }
+    if (k == 115) { return NAV_DOWN; }    # 's'
+    if (k == 106) { return NAV_DOWN; }    # 'j'
+    if (k == 10) { return NAV_SELECT; }
+    if (k == 13) { return NAV_SELECT; }
+    if (k == 32) { return NAV_SELECT; }
+    if (k == 113) { return NAV_BACK; }    # 'q'
+    if (k == KEY_ESC) { return NAV_BACK; }
+    if (k == 3) { return NAV_BACK; }      # Ctrl-C
+    return NAV_NONE;
+}
+
+# The arrow a sequence's final byte names, or KEY_NONE.
+fn input_arrow(ch): i64 {
+    if (ch == 65) { return KEY_UP; }
+    if (ch == 66) { return KEY_DOWN; }
+    if (ch == 67) { return KEY_RIGHT; }
+    if (ch == 68) { return KEY_LEFT; }
+    return KEY_NONE;
+}
+
+# Feed one input byte; returns the key it completed, or KEY_NONE. Handles
+# ESC [ <final> (with parameters: a modified arrow is still an arrow),
+# ESC O <final> and the Linux console's ESC [ [ <final>. An ESC followed by
+# any other byte is an Esc press (Alt+key sends exactly that, and both quit).
+# Unit-tested.
+fn input_feed(ch): i64 {
+    var st = input_esc;
+    if (st == ESC_IDLE) {
+        if (ch == 27) {
+            input_esc = ESC_START;
+            return KEY_NONE;
+        }
+        return ch;
+    }
+    if (st == ESC_START) {
+        input_esc = ESC_IDLE;
+        if (ch == 91) { input_esc = ESC_CSI; }
+        if (ch == 79) { input_esc = ESC_SS3; }
+        if (input_esc == ESC_IDLE) { return KEY_ESC; }
+        return KEY_NONE;
+    }
+    if (ch == 27) { # a new sequence cuts this one off
+        input_esc = ESC_START;
+        return KEY_NONE;
+    }
+    if (st == ESC_SS3) {
+        input_esc = ESC_IDLE;
+        return input_arrow(ch);
+    }
+    if (st == ESC_FKEY) {
+        input_esc = ESC_IDLE;
+        return KEY_NONE;
+    }
+    if (st == ESC_CSI) {
+        if (ch == 91) {
+            input_esc = ESC_FKEY;
+            return KEY_NONE;
+        }
+    }
+    if (ch >= 32) {
+        if (ch <= 63) { # parameter or intermediate byte
+            input_esc = ESC_CSI_ARGS;
+            return KEY_NONE;
+        }
+    }
+    input_esc = ESC_IDLE;
+    if (ch >= 64) {
+        if (ch <= 126) { return input_arrow(ch); }
+    }
+    return KEY_NONE;
+}
+
+# A read found nothing waiting. An ESC that nothing followed was the Esc
+# key. An open CSI / SS3 stays open: its bytes are still on the way, and a
+# lone Esc can't have started it. Unit-tested.
+fn input_flush(): i64 {
+    if (input_esc != ESC_START) { return KEY_NONE; }
+    input_esc = ESC_IDLE;
+    return KEY_ESC;
+}
+
+# Decode one read's result (n <= 0: nothing was waiting) to the OR of its
+# action bits. Unit-tested.
+fn input_decode_actions(buf, n): i64 {
+    if (n <= 0) { return bb_key_action(input_flush()); }
+    var act = 0;
+    var pos = 0;
+    while (pos < n) {
+        act = act | bb_key_action(input_feed(load8(buf + pos)));
+        pos = pos + 1;
+    }
+    return act;
+}
+
+# Decode one read's result to its first menu action. Every byte is still fed
+# so the decoder stays in step. Unit-tested.
+fn input_decode_nav(buf, n): i64 {
+    if (n <= 0) { return input_nav_key(input_flush()); }
+    var nav = NAV_NONE;
+    var k = NAV_NONE;
+    var pos = 0;
+    while (pos < n) {
+        k = input_nav_key(input_feed(load8(buf + pos)));
+        if (nav == NAV_NONE) { nav = k; }
+        pos = pos + 1;
+    }
+    return nav;
+}
+
 # Put the terminal into raw, non-blocking mode (saves the old settings).
+# Returns 0, or -1 without changing anything if stdin is not a terminal: the
+# game can't be played from a pipe or /dev/null, whose reads block or report
+# EOF forever.
 fn input_init(): i64 {
-    syscall(16, 0, TCGETS, &orig_termios);
+    if (syscall(16, 0, TCGETS, &orig_termios) < 0) { return 0 - 1; }
     var raw[64];
     memcpy(&raw, &orig_termios, 60);
     # c_lflag &= ~(ICANON|ECHO|ISIG) = ~(2|8|1) = ~11
@@ -87,7 +265,7 @@ fn input_init(): i64 {
     # blocking (VMIN=1), so the loop only advances on a keypress.
     store8(&raw + 23, 0); # c_cc[VMIN]
     store8(&raw + 22, 0); # c_cc[VTIME]
-    syscall(16, 0, TCSETS, &raw);
+    if (syscall(16, 0, TCSETS, &raw) < 0) { return 0 - 1; }
     raw_active = 1;
     return 0;
 }
@@ -100,89 +278,35 @@ fn input_shutdown(): i64 {
     return 0;
 }
 
-# Read all bytes available this frame; return the OR of action bits.
+# Read the bytes available this frame; return the OR of action bits.
 # Non-blocking: returns 0 immediately when nothing is waiting.
 fn input_poll(): i64 {
     var buf[32];
-    var n = syscall(0, 0, &buf, 32);
-    if (n <= 0) { return 0; }
-    var act = 0;
-    var pos = 0;
-    var ch = 0;
-    var s1 = 0;
-    var s2 = 0;
-    while (pos < n) {
-        ch = load8(&buf + pos);
-        if (ch == 27) {
-            s1 = 0;
-            s2 = 0;
-            if (pos + 2 < n) {
-                s1 = load8(&buf + pos + 1);
-                s2 = load8(&buf + pos + 2);
-            }
-            if (s1 == 91) {
-                if (s2 == 67) { act = act | ACT_RIGHT; }
-                if (s2 == 68) { act = act | ACT_LEFT; }
-                pos = pos + 3;
-                continue;
-            }
-            act = act | ACT_QUIT;
-            pos = pos + 1;
-        } else {
-            act = act | bb_key_action(ch);
-            pos = pos + 1;
-        }
-    }
-    return act;
+    return input_decode_actions(&buf, syscall(0, 0, &buf, INPUT_READ_BYTES));
 }
 
-# Read one raw byte from stdin (non-blocking): the byte (0..255), or -1
-# if nothing is waiting. For high-score initials entry. Not unit-tested
-# (no controlling terminal in CI).
-fn input_read_byte(): i64 {
-    var b[1];
-    var n = syscall(0, 0, &b, 1);
-    if (n <= 0) { return 0 - 1; }
-    return load8(&b);
-}
-
-# Read available bytes; return the first menu nav action found. w/k/up ->
-# UP, s/j/down -> DOWN, enter/space -> SELECT, q/ESC -> BACK; NAV_NONE if
-# nothing. Non-blocking. Not unit-tested (no controlling terminal in CI).
+# Read the bytes available this frame; return the first menu action found,
+# NAV_NONE if none. Non-blocking.
 fn input_nav(): i64 {
     var buf[32];
-    var n = syscall(0, 0, &buf, 32);
-    if (n <= 0) { return NAV_NONE; }
-    var pos = 0;
-    var ch = 0;
-    var s1 = 0;
-    var s2 = 0;
-    while (pos < n) {
-        ch = load8(&buf + pos);
-        if (ch == 27) {
-            s1 = 0;
-            s2 = 0;
-            if (pos + 2 < n) {
-                s1 = load8(&buf + pos + 1);
-                s2 = load8(&buf + pos + 2);
-            }
-            if (s1 == 91) {
-                if (s2 == 65) { return NAV_UP; }
-                if (s2 == 66) { return NAV_DOWN; }
-                pos = pos + 3;
-                continue;
-            }
-            return NAV_BACK;
+    return input_decode_nav(&buf, syscall(0, 0, &buf, INPUT_READ_BYTES));
+}
+
+# Read one decoded key (non-blocking), or -1 if none is ready. A sequence
+# that ran out mid-way finishes on a later call. For the initials prompt
+# and "press any key" screens. Needs a terminal, so not unit-tested.
+fn input_read_key(): i64 {
+    var b[1];
+    var k = KEY_NONE;
+    var got = 0;
+    while (k == KEY_NONE) {
+        if (syscall(0, 0, &b, 1) <= 0) {
+            if (got == 0) { k = input_flush(); }
+            if (k == KEY_NONE) { return 0 - 1; }
+            return k;
         }
-        if (ch == 119) { return NAV_UP; }
-        if (ch == 107) { return NAV_UP; }
-        if (ch == 115) { return NAV_DOWN; }
-        if (ch == 106) { return NAV_DOWN; }
-        if (ch == 10) { return NAV_SELECT; }
-        if (ch == 13) { return NAV_SELECT; }
-        if (ch == 32) { return NAV_SELECT; }
-        if (ch == 113) { return NAV_BACK; }
-        pos = pos + 1;
+        got = 1;
+        k = input_feed(load8(&b));
     }
-    return NAV_NONE;
+    return k;
 }

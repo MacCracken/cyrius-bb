@@ -41,8 +41,13 @@ fn fb_set(f, x, y, r, g, b): i64 {
     return 0;
 }
 
-# Read one channel (0=R, 1=G, 2=B) at (x, y). For tests + present.
+# Read one channel (0=R, 1=G, 2=B) at (x, y); out-of-range reads as 0. For
+# tests + present.
 fn fb_get(f, x, y, ch): i64 {
+    if (x < 0) { return 0; }
+    if (y < 0) { return 0; }
+    if (x >= load64(f + FB_W)) { return 0; }
+    if (y >= load64(f + FB_H)) { return 0; }
     var off = (y * load64(f + FB_W) + x) * 3;
     return load8(load64(f + FB_PX) + off + ch);
 }
@@ -80,9 +85,9 @@ fn fb_clear(f, r, g, b): i64 {
 }
 
 # Dump the surface as a binary PPM (P6). Returns 0 on success, -1 if the
-# file could not be opened. flags 65 = O_WRONLY|O_CREAT, mode 0644.
+# file could not be opened. flags 577 = O_WRONLY|O_CREAT|O_TRUNC, mode 0644.
 fn fb_write_ppm(f, path): i64 {
-    var fd = file_open(path, 65, 0x1A4);
+    var fd = file_open(path, 577, 0x1A4);
     if (fd < 0) { return 0 - 1; }
     file_write(fd, "P6\n", 3);
     fmt_int_fd(fd, load64(f + FB_W));

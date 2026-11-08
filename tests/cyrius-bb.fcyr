@@ -1,18 +1,214 @@
-# cyrius-bb fuzz harness
+# cyrius-bb fuzz harness: the two places outside bytes reach the game, the
+# save file (hs_decode) and the terminal (the input decoder). Deterministic
+# (fixed-seed xorshift), so a failure reproduces. Exits 1 on any violated
+# invariant; a crash fails the run too.
 
 # thread_local: manual-include stdlib module (cyrius 6.3.x) — the
 # auto-prepended sigil references thread_local_*; include it so the
 # build does not fatal on a reachable undefined function.
 include "lib/thread_local.cyr"
 
-fn fuzz_main(data, len) {
-    if (len == 0) { return 0; }
+include "src/save.cyr"
+include "src/input.cyr"
+
+enum FuzzRuns {
+    FZ_SAVE_RUNS = 8000;
+    FZ_INPUT_RUNS = 30000;
+    FZ_MAX_FILE = 256;  # hs_load reads at most this much
+    FZ_MAX_KEYS = 96;
+}
+
+var fz_state = 2463534242;
+var fz_fails = 0;
+
+fn fz_next(): i64 {
+    var x = fz_state;
+    x = x ^ (x << 13);
+    x = x ^ (x >> 7);
+    x = x ^ (x << 17);
+    fz_state = x;
+    return x;
+}
+
+# Uniform-enough integer in [0, n).
+fn fz_below(n): i64 { return (fz_next() >> 1) % n; }
+
+fn fz_fail(msg): i64 {
+    println(msg);
+    fz_fails = fz_fails + 1;
+    return 0;
+}
+
+fn fz_fill(buf, n): i64 {
+    var i = 0;
+    while (i < n) {
+        store8(buf + i, fz_below(256));
+        i = i + 1;
+    }
+    return 0;
+}
+
+# hs_decode returns 0 / -1 / -2, holds to HS_MAX entries, and leaves the
+# table untouched when it refuses.
+fn fz_check_decode(buf, len): i64 {
+    var t = hs_new();
+    hs_insert(t, 90, 89, 88, 7);
+    var r = hs_decode(t, buf, len);
+    if (r == 0) {
+        if (hs_count(t) > HS_MAX) { fz_fail("decode accepted more than HS_MAX entries"); }
+        return 0;
+    }
+    if (r != (0 - 1) && r != (0 - 2)) { fz_fail("decode returned an undocumented code"); }
+    if (hs_count(t) != 1) { fz_fail("a refused decode changed the count"); }
+    if (hs_score(t, 0) != 7) { fz_fail("a refused decode changed an entry"); }
+    return r;
+}
+
+# Seal plaintext exactly as hs_encode does: a valid HMAC, so the hostile
+# bytes get past the check and reach hs_deserialize.
+fn fz_seal(plain, plen, out, cap): i64 {
+    var mac[32];
+    hmac_sha256(save_key(), strlen(save_key()), plain, plen, &mac);
+    var clen = compress(FORMAT_ZLIB, plain, plen, out + 40, cap - 40);
+    if (clen < 0) { return clen; }
+    memcpy(out, "CYBB", 4);
+    memcpy(out + 4, &mac, 32);
+    store32(out + 36, plen);
+    return 40 + clen;
+}
+
+fn fz_save(): i64 {
+    var t = hs_new();
+    hs_insert(t, 65, 66, 67, 9000);
+    hs_insert(t, 68, 69, 70, 4200);
+    hs_insert(t, 71, 72, 73, 15);
+    var valid = alloc(FZ_MAX_FILE);
+    var vlen = hs_encode(t, valid, FZ_MAX_FILE);
+    if (fz_check_decode(valid, vlen) != 0) { fz_fail("a valid file did not decode"); }
+    var m = alloc(FZ_MAX_FILE);
+    var plain = alloc(FZ_MAX_FILE);
+    var i = 0;
+    var k = 0;
+    var flips = 0;
+    var n = 0;
+    while (i < FZ_SAVE_RUNS) {
+        if (i % 4 == 0) { # garbage of any length
+            n = fz_below(FZ_MAX_FILE + 1);
+            fz_fill(m, n);
+            fz_check_decode(m, n);
+        }
+        if (i % 4 == 1) { # a valid file with a few bytes changed
+            memcpy(m, valid, vlen);
+            flips = 1 + fz_below(8);
+            k = 0;
+            while (k < flips) {
+                store8(m + fz_below(vlen), fz_below(256));
+                k = k + 1;
+            }
+            fz_check_decode(m, vlen);
+        }
+        if (i % 4 == 2) { # truncated, or extended with junk
+            memcpy(m, valid, vlen);
+            n = fz_below(FZ_MAX_FILE + 1);
+            if (n > vlen) { fz_fill(m + vlen, n - vlen); }
+            fz_check_decode(m, n);
+        }
+        if (i % 4 == 3) { # hostile plaintext behind a valid HMAC
+            n = 2 + fz_below(199);
+            fz_fill(plain, n);
+            if (fz_below(4) != 0) { store8(plain, 1); }
+            if (fz_below(2) == 0) { store8(plain + 1, fz_below(24)); }
+            flips = fz_seal(plain, n, m, FZ_MAX_FILE);
+            if (flips > 0) { fz_check_decode(m, flips); }
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+# Bytes weighted toward what the decoder branches on.
+fn fz_key_byte(): i64 {
+    if (fz_below(3) == 0) { return fz_below(256); }
+    var c = fz_below(16);
+    if (c == 0) { return 27; }
+    if (c == 1) { return 27; }
+    if (c == 2) { return 91; }
+    if (c == 3) { return 91; }
+    if (c == 4) { return 79; }
+    if (c == 5) { return 65; }
+    if (c == 6) { return 66; }
+    if (c == 7) { return 67; }
+    if (c == 8) { return 68; }
+    if (c == 9) { return 59; }
+    if (c == 10) { return 49; }
+    if (c == 11) { return 126; }
+    if (c == 12) { return 97; }
+    if (c == 13) { return 100; }
+    if (c == 14) { return 113; }
+    return 3;
+}
+
+# Decoding a byte stream gives the same result however reads split it.
+fn fz_input(): i64 {
+    var buf = alloc(FZ_MAX_KEYS);
+    var i = 0;
+    var k = 0;
+    var n = 0;
+    var cut = 0;
+    var whole = 0;
+    var split = 0;
+    var nav_w = 0;
+    var nav_s = 0;
+    var r = 0;
+    while (i < FZ_INPUT_RUNS) {
+        n = 1 + fz_below(FZ_MAX_KEYS);
+        k = 0;
+        while (k < n) {
+            store8(buf + k, fz_key_byte());
+            k = k + 1;
+        }
+        input_esc = ESC_IDLE;
+        whole = input_decode_actions(buf, n);
+        if (whole < 0 || whole > 63) { fz_fail("action bits out of range"); }
+        input_esc = ESC_IDLE;
+        nav_w = input_decode_nav(buf, n);
+        if (nav_w < NAV_NONE || nav_w > NAV_BACK) { fz_fail("nav action out of range"); }
+        input_esc = ESC_IDLE;
+        split = 0;
+        k = 0;
+        while (k < n) {
+            cut = 1 + fz_below(n - k);
+            split = split | input_decode_actions(buf + k, cut);
+            k = k + cut;
+        }
+        if (split != whole) { fz_fail("actions depend on where reads split"); }
+        input_esc = ESC_IDLE;
+        nav_s = NAV_NONE;
+        k = 0;
+        while (k < n) {
+            cut = 1 + fz_below(n - k);
+            r = input_decode_nav(buf + k, cut);
+            if (nav_s == NAV_NONE) { nav_s = r; }
+            k = k + cut;
+        }
+        if (nav_s != nav_w) { fz_fail("nav depends on where reads split"); }
+        input_flush();
+        if (input_esc == ESC_START) { fz_fail("flush left a bare ESC pending"); }
+        if (input_esc < ESC_IDLE || input_esc > ESC_FKEY) { fz_fail("decoder left in an unknown state"); }
+        i = i + 1;
+    }
     return 0;
 }
 
 fn main() {
     alloc_init();
-    fuzz_main("test", 4);
+    fl_init();
+    fz_save();
+    fz_input();
+    if (fz_fails != 0) {
+        println("fuzz: FAILED");
+        return 1;
+    }
     println("fuzz: ok");
     return 0;
 }

@@ -60,20 +60,13 @@ jobs:
           }
 
       - name: Resolve dependencies
-        run: cyrius deps
+        # --locked writes nothing and fails on any difference from the
+        # committed lib/ + cyrius.lock. A plain `cyrius deps` would quietly
+        # repair lib/ and regenerate an emptied lock, so neither would fail.
+        run: cyrius deps --locked
 
       - name: Verify dep hashes
-        # cyrius 6.0.1 has a known regression where `cyrius deps` writes an
-        # empty cyrius.lock for some manifest shapes (incl. ours). Only run
-        # --verify when the committed lock actually has entries, so a
-        # populated lock still enforces integrity but an empty one doesn't
-        # trivially-pass. Drop this guard once the upstream fix lands.
-        run: |
-          if [ -s cyrius.lock ] && [ "$(wc -l < cyrius.lock)" -gt 0 ]; then
-            cyrius deps --verify
-          else
-            echo "::warning::cyrius.lock is empty (cyrius 6.0.1 lockfile-writer regression) — verify skipped"
-          fi
+        run: cyrius deps --verify
 
       - name: Build
         run: |
@@ -83,7 +76,7 @@ jobs:
 
       - name: Lint
         run: |
-          for f in src/*.cyr; do cyrius lint "$f"; done
+          for f in src/*.cyr; do cyrius lint --exit-with-count "$f"; done
 
       - name: Upload build
         uses: actions/upload-artifact@v4
@@ -131,6 +124,9 @@ jobs:
         run: |
           cyrius test tests/cyrius-bb.tcyr 2>&1 | tee /tmp/test_output
           tail -1 /tmp/test_output | grep ', 0 failed'
+
+      - name: Fuzz the save decoder and input decoder
+        run: cyrius fuzz
 
   docs:
     name: Documentation

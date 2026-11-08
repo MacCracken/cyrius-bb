@@ -2,7 +2,7 @@
 #
 # Two modes:
 #   cyrius-bb            interactive — raw-tty input + /dev/fb0 present,
-#                        ~60 fps loop until quit / game over / level clear
+#                        title menu, ~60 fps game loop, high-score entry
 #   cyrius-bb <frames>   headless smoke — step N ticks, dump a PPM, print
 #                        score + bricks remaining (CI-friendly, no I/O)
 #
@@ -70,14 +70,25 @@ fn play_event_sfx(wd): i64 {
 }
 
 # Console-only (not CI-tested, like the game loop): block until a key,
-# return its byte.
+# return it.
 fn wait_key(): i64 {
     var ch = 0 - 1;
     while (ch < 0) {
         frame_sleep();
-        ch = input_read_byte();
+        ch = input_read_key();
     }
     return ch;
+}
+
+# Console-only: discard input until none has come for INPUT_SETTLE_FRAMES,
+# so a key still held from play can't act on the screen that follows.
+fn settle_input(): i64 {
+    var quiet = 0;
+    while (input_settled(quiet) == 0) {
+        frame_sleep();
+        quiet = input_settle_step(quiet, input_read_key());
+    }
+    return 0;
 }
 
 # Console-only: prompt for 3 initials (typed A-Z, backspace edits, Enter
@@ -90,8 +101,10 @@ fn enter_initials(f, score): i64 {
     var pos = 0;
     var done = 0;
     var ch = 0;
-    var up = 0;
     var k = 0;
+    # A key held from play is still repeating: ignore input until it stops.
+    var quiet = 0;
+    var ready = 0;
     while (done == 0) {
         frame_sleep();
         fb_clear(f, 12, 10, 28);
@@ -105,18 +118,15 @@ fn enter_initials(f, score): i64 {
         }
         hud_draw_text(f, 40, 122, "ENTER TO SAVE", 1, 150, 150, 175);
         fb_present_blit(f);
-        ch = input_read_byte();
-        if (ch >= 0) {
-            if (ch == 10) { done = 1; }
-            if (ch == 13) { done = 1; }
-            if (ch == 127) { if (pos > 0) { pos = pos - 1; } }
-            if (ch == 8) { if (pos > 0) { pos = pos - 1; } }
-            up = ch;
-            if (up >= 97) { if (up <= 122) { up = up - 32; } }
-            if (up >= 65) { if (up <= 90) { if (pos < 3) {
-                        store8(&ini + pos, up);
-                        pos = pos + 1;
-                    } } }
+        ch = input_read_key();
+        if (ready == 0) {
+            quiet = input_settle_step(quiet, ch);
+            ready = input_settled(quiet);
+        } else {
+            if (ch >= 0) {
+                pos = initials_apply(&ini, pos, ch);
+                if (pos == INITIALS_DONE) { done = 1; }
+            }
         }
     }
     return load8(&ini) | (load8(&ini + 1) << 8) | (load8(&ini + 2) << 16);
@@ -144,13 +154,16 @@ fn render_scores(f, t): i64 {
 # Console-only: after a finished game, if the score qualifies, take the
 # player's initials and persist; then show the table until a key press.
 fn post_game(f, scores, score): i64 {
+    var saved = 0;
     if (hs_qualifies(scores, score) == 1) {
         var packed = enter_initials(f, score);
         hs_insert(scores, packed & 255, (packed >> 8) & 255, (packed >> 16) & 255, score);
-        hs_save(scores);
+        saved = hs_save(scores);
     }
     render_scores(f, scores);
+    if (saved < 0) { hud_draw_text(f, 82, 143, "NOT SAVED", 1, 240, 120, 80); }
     fb_present_blit(f);
+    settle_input();
     wait_key();
     return 0;
 }
@@ -248,8 +261,8 @@ fn play_game(f, scores): i64 {
         if ((act & ACT_QUIT) != 0) { running = 0; }
         if ((act & ACT_MUTE) != 0) { audio_toggle_mute(); }
         if ((act & ACT_PAUSE) != 0) { paused = 1 - paused; }
-        hold_l = input_hold_step(hold_l, act & ACT_LEFT);
-        hold_r = input_hold_step(hold_r, act & ACT_RIGHT);
+        hold_l = input_hold_dir(hold_l, act & ACT_LEFT, act & ACT_RIGHT);
+        hold_r = input_hold_dir(hold_r, act & ACT_RIGHT, act & ACT_LEFT);
         if (paused == 0) {
             if (hold_l > 0) { paddle_move(world_paddle(wd), 0 - dx, 0, maxx); }
             if (hold_r > 0) { paddle_move(world_paddle(wd), dx, 0, maxx); }
@@ -323,12 +336,19 @@ fn menu_loop(f, scores): i64 {
     return pick;
 }
 
+fn warn(msg): i64 { return eprint(msg, strlen(msg)); }
+
 fn run_interactive(): i64 {
+    if (input_init() < 0) {
+        warn("cyrius-bb: stdin is not a terminal (run it on a Linux console, or pass a frame count).\n");
+        return 1;
+    }
     var f = fb_new(AREA_W, AREA_H);
     var scores = hs_new();
     hs_load(scores);
-    input_init();
-    fb_present_open(f);
+    if (fb_present_open(f) < 0) {
+        warn("cyrius-bb: no usable /dev/fb0, so there is no picture. Run it on a Linux text console. q quits.\n");
+    }
     sound_open();
     var running = 1;
     var choice = 0;

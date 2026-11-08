@@ -10,9 +10,9 @@
 # Environment-specific and NOT unit-tested — there is no writable
 # framebuffer under a desktop (X/Wayland) session, so this is exercised
 # only during real play on a Linux text console. Degrades gracefully: if
-# /dev/fb0 will not open, blits become no-ops and the game still runs the
-# simulation + input. Assumes a 32-bpp framebuffer (the common case);
-# other depths fall through best-effort. Requires framebuf.cyr.
+# /dev/fb0 will not open, or isn't a 32-bpp mode at least as big as the
+# surface, blits become no-ops and the game still runs the simulation +
+# input. The pure geometry helpers are unit-tested. Requires framebuf.cyr.
 
 enum FbIoctl {
     FBIOGET_VSCREENINFO = 0x4600;
@@ -26,6 +26,41 @@ var present_stride = 0;  # framebuffer bytes per row
 var present_scale = 1;   # integer upscale factor
 var present_ox = 0;      # centred pixel offset x
 var present_oy = 0;      # centred pixel offset y
+var present_xoff = 0;    # visible window's pixel offset x (console panning)
+var present_yoff = 0;    # visible window's pixel offset y
+
+# Whether a probed mode can show a w x h surface. The blit writes 32-bpp
+# pixels, and a mode smaller than the surface would give negative offsets:
+# lseek refuses them and the write lands wherever the last one ended. Pure.
+fn present_usable(xres, yres, bpp, w, h): i64 {
+    if (bpp != 32) { return 0; }
+    if (xres < w) { return 0; }
+    if (yres < h) { return 0; }
+    return 1;
+}
+
+# Largest integer scale that fits, capped at PRESENT_MAX_SCALE. Pure.
+fn present_fit(xres, yres, w, h): i64 {
+    var s = xres / w;
+    var sv = yres / h;
+    if (sv < s) { s = sv; }
+    if (s > PRESENT_MAX_SCALE) { s = PRESENT_MAX_SCALE; }
+    return s;
+}
+
+# Device byte offset of pixel row `row` of the centred, scaled image. The
+# visible window starts at (xoff, yoff), non-zero when the console is
+# panned. Pure.
+fn present_offset(row, oy, ox, yoff, xoff, stride): i64 {
+    return (yoff + oy + row) * stride + (xoff + ox) * 4;
+}
+
+# Give up on the framebuffer: every later blit is a no-op.
+fn fb_present_refuse(): i64 {
+    file_close(present_fd);
+    present_fd = 0 - 1;
+    return 0 - 1;
+}
 
 # Open /dev/fb0, probe geometry, compute scale + centre offsets, and clear
 # the screen. Returns the fd, or -1 if the framebuffer is unavailable.
@@ -38,21 +73,17 @@ fn fb_present_open(f): i64 {
     var w = fb_w(f);
     var h = fb_h(f);
     var vinfo = alloc(256);
-    syscall(16, present_fd, FBIOGET_VSCREENINFO, vinfo);
+    var finfo = alloc(256);
+    if (syscall(16, present_fd, FBIOGET_VSCREENINFO, vinfo) < 0) { return fb_present_refuse(); }
+    if (syscall(16, present_fd, FBIOGET_FSCREENINFO, finfo) < 0) { return fb_present_refuse(); }
     var xres = load32(vinfo + 0);
     var yres = load32(vinfo + 4);
-    var finfo = alloc(256);
-    syscall(16, present_fd, FBIOGET_FSCREENINFO, finfo);
+    if (present_usable(xres, yres, load32(vinfo + 24), w, h) == 0) { return fb_present_refuse(); }
+    present_xoff = load32(vinfo + 16);
+    present_yoff = load32(vinfo + 20);
     var stride = load32(finfo + 48); # fb_fix_screeninfo.line_length
-    # fall back to surface-sized exact match if the probe looked bogus
-    if (xres <= 0) { xres = w; }
-    if (yres <= 0) { yres = h; }
     if (stride <= 0) { stride = xres * 4; }
-    var s = xres / w;
-    var sv = yres / h;
-    if (sv < s) { s = sv; }
-    if (s < 1) { s = 1; }
-    if (s > PRESENT_MAX_SCALE) { s = PRESENT_MAX_SCALE; }
+    var s = present_fit(xres, yres, w, h);
     present_scale = s;
     present_stride = stride;
     present_ox = (xres - w * s) / 2;
@@ -61,7 +92,7 @@ fn fb_present_open(f): i64 {
     # clear the screen to black once (best-effort)
     var blank = alloc(stride);
     memset(blank, 0, stride);
-    syscall(8, present_fd, 0, 0);
+    syscall(8, present_fd, present_offset(0, 0, 0, present_yoff, present_xoff, stride), 0);
     var ry = 0;
     while (ry < yres) {
         file_write(present_fd, blank, stride);
@@ -106,7 +137,7 @@ fn fb_present_blit(f): i64 {
         # emit it `s` times for the vertical scale
         vy = 0;
         while (vy < s) {
-            fboff = (present_oy + sy * s + vy) * present_stride + present_ox * 4;
+            fboff = present_offset(sy * s + vy, present_oy, present_ox, present_yoff, present_xoff, present_stride);
             syscall(8, present_fd, fboff, 0); # lseek SEEK_SET
             file_write(present_fd, present_row, rowbytes);
             vy = vy + 1;

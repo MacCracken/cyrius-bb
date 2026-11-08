@@ -77,6 +77,21 @@ fn brick_y(g, idx): i64 {
     return load64(g + GR_OY) + r * (load64(g + GR_BH) + load64(g + GR_GY));
 }
 
+# Whether the side face a ball moving at vx would strike on brick idx is
+# exposed, not butted against a live neighbour in its row. Moving right it
+# strikes the left face, moving left the right face. A ball rising under the
+# seam of two bricks overlaps both and is not hitting either inner face.
+fn brick_side_open(g, idx, vx): i64 {
+    var cols = load64(g + GR_COLS);
+    var c = idx % cols;
+    if (vx > 0) {
+        if (c == 0) { return 1; }
+        return 1 - brick_alive(g, idx - 1);
+    }
+    if (c == cols - 1) { return 1; }
+    return 1 - brick_alive(g, idx + 1);
+}
+
 # Destroy brick idx if alive. Returns points gained (tier * value) or 0
 # if it was already dead.
 fn brick_destroy(g, idx): i64 {
