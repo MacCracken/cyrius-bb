@@ -91,10 +91,11 @@ on bare stdlib.
   DAC sat at −65 dB and both output pins were muted, which makes a working
   playback path inaudible. Set the mixer before judging the audio (log in on
   the seat, then `wpctl` or `alsamixer`).
-- **A busy card stalls start-up.** vani opens the PCM without `O_NONBLOCK`,
-  so while another client holds the card (PipeWire playing something, another
-  game), `sound_open` waits for it instead of failing. It runs before the
-  menu, so the game hangs until the card is free (measured: a 2.7 s wait on a
-  card another process held for 3 s). PipeWire's default is to release an
-  idle card after 5 s. The fix belongs upstream in vani's
-  `audio_open_playback`.
+- **A busy card runs silent (since 0.8.4).** Through vani 1.2.5 the PCM was
+  opened without `O_NONBLOCK`, so while another client held the card
+  (PipeWire playing something, another game), `sound_open` waited for it
+  before the menu (measured: a 2.7 s wait on a card another process held for
+  3 s). vani 1.2.6 opens non-blocking and clears the flag before the first
+  PREPARE, so a busy card now returns the null handle at once and the game
+  runs silent for that session, while writes and drain still block. It does
+  not retry, so a card held at launch stays silent until the next run.

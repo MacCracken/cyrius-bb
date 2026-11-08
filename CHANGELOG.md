@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.8.4] — 2026-11-08
+
+**The sound fix ships, and every dependency moves to the Cyrius 6.6.20 set.**
+Toolchain `6.6.6 → 6.6.20`, vani-core `1.2.5 → 1.2.9`, with sankoch, sigil and
+bayan following the snapshot. The bump changes no gameplay, render, synth or
+save-format behaviour: the headless smoke, every demo artifact and the
+high-score file are byte-identical to the same source on 6.6.6.
+
 **Sound actually plays.** A hardware probe on the dev box (card 1, the ALC897
 analog PCM) showed the in-game audio has been silent since the 0.8.0 ALSA port,
 behind an unchecked return value. The fix renders in the device's own format,
@@ -53,8 +61,36 @@ cache.
   period / buffer: sound plays, but long cues can stall the loop and there is
   no silence fill. A device that refuses the format, or the prepare, is closed
   and `snd_dev` stays 0, so no write reaches an unconfigured PCM.
+- **A busy card no longer stalls start-up.** Through vani 1.2.5 the PCM was
+  opened without `O_NONBLOCK`, so while another client held card 1, `sound_open`
+  waited for the card before the menu (measured: 2.7 s while a second process
+  held it for 3 s). vani 1.2.6 opens non-blocking and clears the flag before
+  the first PREPARE, so a busy card gives the null handle at once and the game
+  runs silent. Picked up by the re-vendor below; no cyrius-bb source changed.
 
 ### Changed
+- **Cyrius pin `6.6.6` → `6.6.20`** (`cyrius.cyml [package].cyrius`). `lib/`
+  re-vendored with `cyrius deps`; all 54 modules are byte-identical to the
+  6.6.20 snapshot, including one new file, `lib/poison.cyr` (the allocator's
+  debug-poison peer, now pulled in by `alloc` / `freelist`). The manifest's
+  `[deps].stdlib` list is unchanged. The snapshot's folded crates move with it:
+  **sankoch 2.8.0 → 2.8.1**, **sigil 3.12.18 → 3.13.10**, **bayan 1.5.6 → 1.5.12**.
+- **Re-vendored `vani-core` 1.2.5 → 1.2.9** (`vendor/vani-core.cyr`, read from
+  the vani `1.2.9` tag), the release 6.6.20 folds as `lib/vani.cyr`. Not vani
+  1.2.10, which pins cyrius 6.7.x. Every `audio_*` signature `src/sound.cyr`
+  calls is unchanged, as are the `AlsaSwParamsLayout` and
+  `SNDRV_PCM_IOCTL_SW_PARAMS` names; the core profile only gains the private
+  `_audio_open_pcm` and `_audio_ioctl`. No call site changed.
+- **`cyrius.lock` is populated** (54 entries; it had been empty since the 6.0.1
+  lockfile-writer regression), so CI's `cyrius deps --verify` step now runs
+  instead of skipping.
+- `cyrius.cyml`: the commented `[deps.sankoch]` / `[deps.sigil]` fallback tags
+  now match the snapshot (2.8.1 / 3.13.10), and the `sys` note no longer
+  predicts the `uname_release` warning (below).
+- **DCE binary: 999,928 B → 1,015,480 B (+15,552 B, +1.6%)**, same source. vani
+  1.2.9 is +16 B; the other +15,536 B is the 6.6.20 compiler and stdlib/crate
+  folds together, not split further. Plain build: 2,073,080 → 2,182,840 B. The
+  static-data advisory moved 394,112 → 395,040 B.
 - **Frames, not bytes.** `ms_samples` → `ms_frames`. `synth_tone` offsets and
   lengths, `sfx_len` and `audio_write_wav`'s count are frames (4 bytes each),
   the unit vani's `audio_write` takes. `sound_play` passes the cached frame
@@ -78,12 +114,13 @@ cache.
   `docs/architecture/001-no-ffi-audio.md` describes the format, the stream
   model and two console gotchas the probe surfaced (below).
 
+### Known warnings (upstream sigil, harmless)
+- `lib/sigil.cyr:28046: array local over the per-fn frame budget gets STATIC
+  storage`: sigil's `var buf[262144]` crypto-bank init, the same warning 0.8.3
+  listed at a different line. The `duplicate fn 'uname_release'` warning is
+  gone, as sigil 3.13.x dropped its copy.
+
 ### Known issues (found while probing, not changed here)
-- **A busy card stalls start-up.** vani opens the PCM without `O_NONBLOCK`, so
-  while another client (PipeWire, another game) holds card 1, `sound_open`
-  waits for the card instead of failing. Measured: 2.7 s while a second
-  process held the card for 3 s. The fix belongs in vani's
-  `audio_open_playback`; the vendored file is not edited here.
 - **A silent mixer is not a silent fix.** A raw hw PCM bypasses PipeWire's
   volume but not the codec's own amps. On the dev box, with only the login
   greeter on the seat (so PipeWire had not taken the card), the ALC897's DAC
@@ -115,7 +152,23 @@ cache.
   byte-identical to 0.8.3; audio is off the headless path.
 - `cyrius lint src/*.cyr`: 0 warnings on all 18 files. `cyrius fmt --check`:
   clean across `src/`, `tests/` and `programs/`. `CYRIUS_DCE=1`: 999,864 →
-  999,928 B.
+  999,928 B (the sound fix alone, on 6.6.6).
+- **After the 6.6.20 bump:**
+  - `cyrius test tests/cyrius-bb.tcyr`: **253 / 253**. `cyrius deps --verify`:
+    54 verified, 0 failed. Lint and `fmt --check` clean.
+  - `programs/{demo,audio_demo,scores_demo}.cyr` and the bench / fuzz entry
+    points build. All 11 artifacts the demos write are byte-identical to a
+    6.6.6 build of the same source, and so is the `<frames>` headless smoke
+    (60 / 600 / 3000 ticks: stdout and final-frame PPM).
+  - **Save-file compatibility, both directions.** 6.6.6 and 6.6.20 builds write
+    byte-identical `scores.cyb` files and each loads the other's intact. A
+    tampered file is still rejected (`-2`, HMAC mismatch).
+  - `CYRIUS_DCE=1`: 1,015,480 B, and a clean copy of the tree builds a
+    byte-identical binary.
+  - **Not re-checked on hardware.** The account that ran the bump has no access
+    to `pcmC1D0p` (`-EACCES`, with the seat ACL held by the login greeter), so
+    the busy-card fix rests on vani's own 1.2.6 hardware run. Listening test
+    still pending.
 
 ## [0.8.3] — 2026-09-26
 
