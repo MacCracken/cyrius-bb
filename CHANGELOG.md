@@ -4,6 +4,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-08
+
+**Dependency-currency release: toolchain `6.6.20 → 6.7.9`, vani-core re-vendored
+`1.2.9 → 1.2.10`.** No gameplay, render, audio-synth or save-format change, and
+no edits under `src/`, `tests/` or `programs/`. The headless smoke, every demo
+artifact and the high-score file are byte-identical to 0.8.4's. 253 assertions
+green; lint + fmt clean.
+
+### Changed
+- **Cyrius pin `6.6.20` → `6.7.9`** (`cyrius.cyml [package].cyrius`). `lib/`
+  re-vendored with `cyrius deps`. All 54 modules are byte-identical to the 6.7.9
+  snapshot, and a resolve from an empty `lib/` gives the same file set and
+  `cyrius.lock`, so no stale leaves remain. `[deps].stdlib` is unchanged. The
+  snapshot's folded crates move with it: **sankoch 2.8.1 → 2.8.3**, **sigil
+  3.13.10 → 3.13.11**, **bayan 1.5.12 → 1.5.13**.
+- **The 6.7.x language changes need no source edits here.** `dyn` is now
+  reserved, a narrow `*T` dereference works at the element's width, a `: stack`
+  pair can no longer be stored into one slot, forward calls are arity-checked,
+  and a classic-`for` step must end at its `)`. The project has no `dyn`
+  identifiers, narrow typed pointers, slices or `: stack` returns, and its
+  forward calls and `for` steps compile unchanged.
+- **Re-vendored `vani-core` 1.2.9 → 1.2.10** (`vendor/vani-core.cyr`, read from
+  the vani `1.2.10` tag), the release 6.7.9 folds as `lib/vani.cyr`. The only
+  code change in the core profile is `O_CLOEXEC` on the PCM open. No `audio_*`
+  signature changed, and no call site did.
+- `cyrius.cyml`: the commented `[deps.sankoch]` / `[deps.sigil]` fallback tags
+  now match the snapshot (2.8.3 / 3.13.11).
+- **DCE binary: 1,015,480 B → 1,019,000 B (+3,520 B, +0.35%)**. vani 1.2.10 is
+  +0 B; the rest is the 6.7.9 compiler and stdlib/crate folds together, not
+  split further. Plain build: 2,182,840 → 2,186,360 B. The static-data advisory
+  moved 395,040 → 394,464 B.
+
+### Known warnings (upstream sigil, harmless)
+- `lib/sigil.cyr:28103: array local over the per-fn frame budget gets STATIC
+  storage`: the same crypto-bank warning 0.8.4 listed, at a new line. There are
+  no new warnings.
+
+### Verified
+- `cyrius test tests/cyrius-bb.tcyr`: **253 / 253**. `cyrius deps --verify`: 54
+  verified, 0 failed. `cyrius lint src/*.cyr`: 0 warnings on all 18 files.
+  `cyrius fmt --check`: clean.
+- `programs/{demo,audio_demo,scores_demo}.cyr` and the bench / fuzz entry points
+  build. All 11 artifacts the demos write are byte-identical to a 6.6.20 build
+  of the same source, and so is the `<frames>` headless smoke (60 / 600 / 3000
+  ticks: stdout and final-frame PPM).
+- **Save-file compatibility, both directions.** 6.6.20 and 6.7.9 builds write
+  byte-identical `scores.cyb` files and each loads the other's intact. A file
+  written by a 6.6.6 build loads too, and a tampered file is still rejected
+  (`-2`, HMAC mismatch).
+- `CYRIUS_DCE=1`: 1,019,000 B, and a clean copy of the tree builds a
+  byte-identical binary.
+- The 6.7.9 release tarball is published, so CI's pin-read install step resolves.
+- **Not done: the closeout pass's manual playthrough, and any hardware check.**
+  The account that ran the bump still has no access to `pcmC1D0p` (`-EACCES`,
+  with the seat ACL held by the login greeter), and there is no console in that
+  session. The console playtest and listening test remain open.
+
 ## [0.8.4] — 2026-11-08
 
 **The sound fix ships, and every dependency moves to the Cyrius 6.6.20 set.**

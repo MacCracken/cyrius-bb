@@ -5,7 +5,7 @@ description = "Break-breaker — 2.5D brick-breaker in Cyrius. Homage to Breakou
 license = "GPL-3.0-only"
 repository = "https://github.com/MacCracken/cyrius-bb"
 language = "cyrius"
-cyrius = "6.6.20"
+cyrius = "6.7.9"
 
 # cyrius-bb ("break-breaker") is a 2.5D brick-breaker reimplementation-
 # from-observation in Cyrius. 50-year-anniversary homage to Breakout
@@ -99,17 +99,17 @@ stdlib = [
 # consumed via the [deps].stdlib list above (resolves from the pinned lib,
 # no network) rather than these git blocks. The git-source coordinates are
 # kept here for reference — switch to them if a future toolchain drops the
-# bundled copies. Tags track what the pinned 6.6.20 snapshot folds: sankoch
-# 2.8.1, sigil 3.13.10. The snapshot copy wins over a same-named [deps.*]
+# bundled copies. Tags track what the pinned 6.7.9 snapshot folds: sankoch
+# 2.8.3, sigil 3.13.11. The snapshot copy wins over a same-named [deps.*]
 # block, so switching means dropping the name from [deps].stdlib too.
 # [deps.sankoch]
 # git = "https://github.com/MacCracken/sankoch.git"
-# tag = "2.8.1"
+# tag = "2.8.3"
 # modules = ["dist/sankoch.cyr"]
 #
 # [deps.sigil]
 # git = "https://github.com/MacCracken/sigil.git"
-# tag = "3.13.10"
+# tag = "3.13.11"
 # modules = ["dist/sigil.cyr"]
 
 # ── Pending deps: not yet wireable ───────────────────────────────────
